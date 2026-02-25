@@ -76,7 +76,7 @@ const LandingPage = () => {
   // Update displayText when words change (locale change)
   useEffect(() => {
     setDisplayText(words[currentWordIndex] || '');
-  }, [locale, words, currentWordIndex]);
+  }, [locale, words]);
 
   const COLORS = ['#ef4444', '#f59e0b', '#8b5cf6'];
   
