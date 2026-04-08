@@ -54,8 +54,8 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
   const isSharedHousehold = useMemo(() => {
     if (!allHouseholds || allHouseholds.length === 0 || !currentHousehold) return false;
     // Personal household is the oldest (first by createdAt)
-    const sortedHouseholds = [...allHouseholds].sort((a, b) => 
-      new Date(a.createdAt || a.joinedAt || 0).getTime() - new Date(b.createdAt || b.joinedAt || 0).getTime()
+    const sortedHouseholds = [...allHouseholds].sort((a, b) =>
+      new Date(a.createdAt || a.joinedAt || 0).getTime() - new Date(b.dAt || b.joinedAt || 0).getTime()
     );
     const personalHousehold = sortedHouseholds[0];
     return personalHousehold?.id !== currentHousehold.id;
@@ -86,11 +86,11 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
 
   // Note: isAccountsLoading is available if needed in the future
   // const isAccountsLoading = isSharedHousehold ? availableAccountsLoading : regularAccountsLoading;
-  
-  
+
+
   // Estado para controlar se é recorrente
   const [isRecurring, setIsRecurring] = useState(false);
-  
+
   // Estados para campos de recorrência
   const [recurringFrequency, setRecurringFrequency] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'>('monthly');
   const [recurringStartDate, setRecurringStartDate] = useState<Date>(new Date());
@@ -102,14 +102,17 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
   const [splits, setSplits] = useState<Array<{ userId: string; amount: number; accountId?: string }>>([]);
   // Erros de validação de saldo para cada split
   const [splitBalanceErrors, setSplitBalanceErrors] = useState<Record<string, string>>({});
-  
+
   // Ref para rastrear se já dividimos automaticamente (para evitar recalcular quando valor muda)
   const hasAutoSplit = useRef(false);
   const lastMemberCount = useRef(0);
   const recalculateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Buscar membros da household (para splits)
   const { data: householdMembers } = useHouseholdMembers(householdId || '');
+
+
+  const isResettingRef = useRef(false);
 
   // Função para calcular próxima data de vencimento baseada na frequência
   const calculateNextDueDate = useCallback((startDate: Date, frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'): Date => {
@@ -210,13 +213,13 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
   const availableAccounts = useMemo(() => {
     if (isCreditCardContext) {
       // Se for contexto de cartão, mostrar apenas cartões de crédito
-      return accounts.filter(account => 
+      return accounts.filter(account =>
         account.type === AccountType.CREDIT
       );
     } else {
       // Caso contrário, mostrar todas as contas (bancárias, cartões de crédito, dinheiro), exceto investimentos
       // O campo de parcelas será controlado pela conta selecionada
-      return accounts.filter(account => 
+      return accounts.filter(account =>
         account.type !== AccountType.INVESTMENT
       );
     }
@@ -249,6 +252,8 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
   // Limpar categoria se não for compatível com o tipo selecionado
   // No contexto de cartão de crédito, apenas despesas são permitidas
   useEffect(() => {
+    if (isResettingRef.current) return;
+
     if (transactionCategory && transactionType && !transaction) {
       const categoryName = getCategoryNameFromDisplay(transactionCategory, t as unknown as Record<string, string>);
       if (categoryName) {
@@ -256,14 +261,14 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
         const expenseCategories = getCategoriesByType(CategoryType.EXPENSE);
         const isIncomeCategory = incomeCategories.includes(categoryName as CategoryName);
         const isExpenseCategory = expenseCategories.includes(categoryName as CategoryName);
-        
+
         // Se for cartão de crédito, limpar categoria se for receita
         if (isCreditCardContext && isIncomeCategory) {
           setValue('category', '', { shouldValidate: true });
         } else if (!isCreditCardContext) {
           // Para outros contextos, validar normalmente
-          if ((transactionType === TransactionType.INCOME && !isIncomeCategory) || 
-              (transactionType === TransactionType.EXPENSE && !isExpenseCategory)) {
+          if ((transactionType === TransactionType.INCOME && !isIncomeCategory) ||
+            (transactionType === TransactionType.EXPENSE && !isExpenseCategory)) {
             setValue('category', '', { shouldValidate: true });
           }
         }
@@ -275,6 +280,8 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
   // em INCOME/EXPENSE limpamos from/to. Não limpar from/to quando é TRANSFER para não apagar
   // os valores ao abrir uma transferência para edição.
   useEffect(() => {
+
+    if (isResettingRef.current) return;
     if (transactionType === TransactionType.TRANSFER) {
       setValue('accountId', '', { shouldValidate: false });
       setValue('category', '', { shouldValidate: false });
@@ -299,14 +306,14 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
     // Prevenir scroll do body quando modal estiver aberto
     const originalStyle = window.getComputedStyle(document.body).overflow;
     document.body.style.overflow = 'hidden';
-    
+
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
       }
     };
     window.addEventListener('keydown', handleEscape);
-    
+
     return () => {
       document.body.style.overflow = originalStyle;
       window.removeEventListener('keydown', handleEscape);
@@ -330,41 +337,49 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
         setValue('type', event.detail.type);
       }
     };
-    
+
     window.addEventListener('setTransactionType', handleSetTransactionType as EventListener);
-    
+
     return () => {
       window.removeEventListener('setTransactionType', handleSetTransactionType as EventListener);
     };
   }, [setValue, isCreditCardContext]);
 
   useEffect(() => {
+    if (isResettingRef.current) return;
+
     if (transaction) {
       const amount = transaction.amount || 0;
       const tDate = transaction.date instanceof Date ? transaction.date : new Date(transaction.date);
       const accountId = transaction.accountId || '';
-      
+
       // Se for contexto de cartão de crédito, forçar tipo EXPENSE
       // Se a transação for INCOME ou TRANSFER, não permitir edição (será bloqueada)
-      const transactionType = isCreditCardContext 
-        ? TransactionType.EXPENSE 
+      const transactionType = isCreditCardContext
+        ? TransactionType.EXPENSE
         : (transaction.type || TransactionType.EXPENSE);
-      
+
+      isResettingRef.current = true;
+
       reset({
         description: transaction.description || '',
         amount: amount,
         type: transactionType,
         category: transaction.categoryName ?? transaction.category ?? '',
         date: tDate,
-        paid: transaction.paid !== undefined ? transaction.paid : true,
+        paid: true,
         accountId: accountId,
         installments: transaction.totalInstallments || 1,
         fromAccountId: transaction.fromAccountId ?? '',
         toAccountId: transaction.toAccountId ?? '',
       });
+
+      setTimeout(() => {
+        isResettingRef.current = false;
+      }, 0);
       currencyMask.setValue(amount);
       setValue('amount', amount);
-      
+
       // Se for cartão de crédito e a transação for INCOME ou TRANSFER, limpar categoria
       if (isCreditCardContext && (transaction.type === TransactionType.INCOME || transaction.type === TransactionType.TRANSFER)) {
         setValue('category', '', { shouldValidate: true });
@@ -375,7 +390,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
       const defaultDate = new Date();
       // Se a data padrão for hoje ou passado, assume como pago (a menos que defaultPaid seja fornecido)
       const isPaidDefault = defaultPaid !== undefined ? defaultPaid : defaultDate >= today;
-      
+
       setIsRecurring(false);
       setRecurringFrequency('monthly');
       setRecurringStartDate(defaultDate);
@@ -384,7 +399,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
       // Limpar splits quando for nova transação
       setIsSplit(false);
       setSplits([]);
-      
+
       // Selecionar primeira conta disponível se não tiver defaultAccountId
       let selectedAccountId = defaultAccountId || '';
       if (!selectedAccountId && availableAccounts.length > 0) {
@@ -393,19 +408,25 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
 
       // Se for contexto de cartão de crédito, sempre usar EXPENSE
       const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
-      
+
+      isResettingRef.current = true;
+
       reset({
         description: '',
         amount: 0,
         type: defaultType,
         category: '',
         date: defaultDate,
-        paid: isPaidDefault,
+        paid: true,
         accountId: selectedAccountId,
         installments: 1,
         fromAccountId: '',
         toAccountId: '',
       });
+
+      setTimeout(() => {
+        isResettingRef.current = false;
+      }, 0);
       currencyMask.setValue('');
       setValue('amount', 0);
       // Garantir que a conta seja definida mesmo se não houver defaultAccountId
@@ -414,7 +435,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transaction?.id, defaultAccountId, defaultPaid, reset, setValue, availableAccounts]);
+  }, [transaction?.id, defaultAccountId, defaultPaid]);
 
   // Dividir automaticamente quando isSplit é ativado pela primeira vez ou quando o número de membros muda
   // Não recalcular quando o valor muda para não sobrescrever edições manuais
@@ -428,21 +449,21 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
 
     if (transactionType === TransactionType.EXPENSE && isSharedHousehold && householdMembers && householdMembers.length > 0 && transactionAmount > 0) {
       // Only include EDITOR and OWNER members for splits
-      const activeMembers = householdMembers.filter((m: HouseholdMember) => 
+      const activeMembers = householdMembers.filter((m: HouseholdMember) =>
         m.user && m.user.email && (m.role === 'EDITOR' || m.role === 'OWNER')
       );
       const currentMemberCount = activeMembers.length;
-      
+
       // Só recalcular automaticamente se:
       // 1. Não foi dividido automaticamente ainda (primeira vez que isSplit é ativado)
       // 2. O número de membros mudou desde a última divisão automática
       // 3. Não há splits ainda (primeira vez)
       // IMPORTANTE: NÃO recalcular quando o valor muda - deixar usuário editar manualmente ou usar botão "Dividir igualmente"
-      const needsRecalculation = !hasAutoSplit.current || 
+      const needsRecalculation = !hasAutoSplit.current ||
         currentMemberCount !== lastMemberCount.current ||
         splits.length === 0 ||
         splits.length !== currentMemberCount;
-      
+
       if (activeMembers.length > 0 && needsRecalculation) {
         // Dividir igualmente entre todos os membros ativos
         const amountPerPerson = transactionAmount / activeMembers.length;
@@ -453,7 +474,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           const existingSplit = splits.find(s => s.userId === member.userId);
           const isCurrentUserMember = member.userId === (authUser?.id || currentUser?.uid);
           const defaultAccountId = existingSplit?.accountId || getDefaultAccountIdForMember(member.userId, isCurrentUserMember);
-          
+
           // O último membro recebe o restante para garantir que a soma seja exata
           if (index === activeMembers.length - 1) {
             const totalSoFar = roundedAmount * (activeMembers.length - 1);
@@ -592,11 +613,11 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           showError(t.sameAccountError);
           return;
         }
-        
+
         // Validar saldo disponível na conta de origem e buscar nomes das contas
         const fromAccount = accounts.find(a => a.id === data.fromAccountId);
         const toAccount = accounts.find(a => a.id === data.toAccountId);
-        
+
         if (fromAccount) {
           const availableBalance = getAvailableBalance(fromAccount);
           if (data.amount > availableBalance) {
@@ -604,12 +625,12 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             return;
           }
         }
-        
+
         // Se não houver descrição, criar automaticamente: "Banco origem → Banco destino"
         const fromAccountName = fromAccount?.name || t.fromAccountDefault;
         const toAccountName = toAccount?.name || t.toAccountDefault;
         const transferDescription = data.description || `${fromAccountName} → ${toAccountName}`;
-        
+
         await createTransfer({
           fromAccountId: data.fromAccountId,
           toAccountId: data.toAccountId,
@@ -631,18 +652,23 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           setIsSplit(false);
           setSplits([]);
           setSplitBalanceErrors({});
+          isResettingRef.current = true;
           reset({
             description: '',
             amount: 0,
-            type: TransactionType.TRANSFER,
-            category: '',
-            date: defaultDate,
+            type: data.type,
+            category: data.category,
+            date: data.date,
             paid: true,
             accountId: '',
-            fromAccountId: '',
+            fromAccountId: data.fromAccountId,
             toAccountId: '',
             installments: 1,
           });
+
+          setTimeout(() => {
+            isResettingRef.current = false;
+          }, 0);
           currencyMask.setValue('');
           setValue('amount', 0);
           setValue('fromAccountId', '');
@@ -733,7 +759,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           onClose();
         } else {
           // Reset form for new recurring transaction
-          const defaultDate = new Date();
+          const defaultDate = data.date;
           setIsRecurring(false);
           setRecurringFrequency('monthly');
           setRecurringStartDate(defaultDate);
@@ -746,18 +772,24 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           if (!selectedAccountId && availableAccounts.length > 0) {
             selectedAccountId = availableAccounts[0].id || '';
           }
+
+          isResettingRef.current = true;
           reset({
             description: '',
             amount: 0,
-            type: isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE,
-            category: '',
-            date: defaultDate,
-            paid: defaultDate >= new Date(new Date().setHours(0, 0, 0, 0)),
+            type: data.type,
+            category: data.category,
+            date: data.date,
+            paid: true,
             accountId: selectedAccountId,
             fromAccountId: '',
             toAccountId: '',
             installments: 1,
           });
+
+          setTimeout(() => {
+            isResettingRef.current = false;
+          }, 0);
           currencyMask.setValue('');
           setValue('amount', 0);
         }
@@ -769,7 +801,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           onClose();
         } else {
           // Reset form for new installment transaction
-          const defaultDate = new Date();
+          const defaultDate = data.date;
           setIsRecurring(false);
           setRecurringFrequency('monthly');
           setRecurringStartDate(defaultDate);
@@ -782,19 +814,25 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           if (!selectedAccountId && availableAccounts.length > 0) {
             selectedAccountId = availableAccounts[0].id || '';
           }
-          const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
+
+          isResettingRef.current = true;
+          // const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
           reset({
             description: '',
             amount: 0,
-            type: defaultType,
-            category: '',
-            date: defaultDate,
-            paid: defaultDate >= new Date(new Date().setHours(0, 0, 0, 0)),
+            type: data.type,
+            category: data.category,
+            date: data.date,
+            paid: true,
             accountId: selectedAccountId,
             fromAccountId: '',
             toAccountId: '',
             installments: 1,
           });
+
+          setTimeout(() => {
+            isResettingRef.current = false;
+          }, 0);
           currencyMask.setValue('');
           setValue('amount', 0);
         }
@@ -818,19 +856,23 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           if (!selectedAccountId && availableAccounts.length > 0) {
             selectedAccountId = availableAccounts[0].id || '';
           }
-          const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
+          isResettingRef.current = true;
+          // const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
           reset({
             description: '',
             amount: 0,
-            type: defaultType,
-            category: '',
-            date: defaultDate,
-            paid: defaultDate >= new Date(new Date().setHours(0, 0, 0, 0)),
+            type: data.type,
+            category: data.category,
+            date: data.date,
+            paid: true,
             accountId: selectedAccountId,
             fromAccountId: '',
             toAccountId: '',
             installments: 1,
           });
+          setTimeout(() => {
+            isResettingRef.current = false;
+          }, 0);
           currencyMask.setValue('');
           setValue('amount', 0);
         }
@@ -844,12 +886,12 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
   return createPortal(
     <div className="fixed inset-0 z-[60] overflow-y-auto">
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/40 animate-fade-in transition-opacity duration-300 ease-out" 
+      <div
+        className="fixed inset-0 bg-black/40 animate-fade-in transition-opacity duration-300 ease-out"
         onClick={onClose}
         aria-hidden="true"
       />
-      
+
       {/* Scrollable Container */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative w-full sm:w-[450px] max-w-lg p-6 border rounded-lg bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 max-h-[90vh] overflow-y-auto min-w-0 animate-slide-in-bottom">
