@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client'
 import * as Sentry from '@sentry/react'
 import App from './App.tsx'
 import './index.css'
-
 // Helper para verificar se está em localhost
 const isLocalhost = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -11,6 +10,14 @@ const isLocalhost = (): boolean => {
          window.location.hostname === '127.0.0.1' ||
          window.location.hostname === '[::1]';
 };
+
+// import { getAuth } from "firebase/auth";
+
+// const auth = getAuth();
+// const user = auth.currentUser;
+
+// const token = await user!.getIdToken();
+// console.log(token);
 
 // Initialize Sentry apenas se não estiver em localhost
 if (import.meta.env.VITE_SENTRY_DSN && !isLocalhost()) {

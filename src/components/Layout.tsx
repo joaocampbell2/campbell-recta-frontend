@@ -19,6 +19,7 @@ import {
   MessageCircle,
   ChevronLeft,
   ChevronRight,
+  Piano,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import MobileBanner from "./MobileBanner";
@@ -149,12 +150,12 @@ const Layout = () => {
     { path: "/app/transactions", label: t.transactions, icon: List },
     { path: "/app/accounts", label: t.accounts, icon: Wallet },
     { path: "/app/credit-cards", label: `${t.creditCards}`, icon: CreditCard },
+    { path: "/app/savings", label: `${t.savingsAccount}`, icon: PiggyBank },
     { path: "/app/recurring", label: t.recurring, icon: Repeat },
-    { path: "/app/goals", label: t.goals, icon: PiggyBank },
+    { path: "/app/goals", label: t.goals, icon: Piano },
     { path: "/app/budgets", label: t.budgets, icon: Target },
     { path: "/app/reports", label: t.reports, icon: Wallet },
     { path: "/app/settings", label: t.settings, icon: Settings },
-    { path: "https://www.reddit.com/r/RectaApp/", label: t.community, icon: MessageSquare, external: true },
   ];
 
   return (
@@ -258,18 +259,7 @@ const Layout = () => {
               );
             })}
             
-            {/* Feedback Button */}
-            <button
-              onClick={() => {
-                setShowFeedbackModal(true);
-                setSidebarOpen(false);
-              }}
-              className={`flex items-center text-sm font-medium rounded-lg transition-all duration-300 bg-purple-lighter dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-light dark:hover:bg-purple-900/50 hover:text-purple-800 dark:hover:text-purple-200 w-full animate-bounce-soft shadow-sm hover:shadow-md ${sidebarCollapsed ? 'justify-center px-2 py-3' : 'px-4 py-3'}`}
-              title={sidebarCollapsed ? t.giveFeedback : undefined}
-            >
-              <MessageCircle className={`h-5 w-5 ${sidebarCollapsed ? '' : 'mr-3'} text-purple-600 dark:text-purple-400`} />
-              {!sidebarCollapsed && t.giveFeedback}
-            </button>
+         
           </nav>
 
           {/* User Section */}

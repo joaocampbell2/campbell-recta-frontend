@@ -64,7 +64,7 @@ import { CategoryName, getCategoryDisplayName, TransactionType, getCategoryIconN
 import { EmptyState } from "../components/EmptyState";
 import type React from "react";
 
-const Accounts = () => {
+const SavingAccounts = () => {
   const { accounts: allAccounts, deleteAccount, deleteTransaction, updateTransaction, loading, customCategories } = useTransactions();
   const { baseCurrency } = useCurrency();
   const { t, locale } = useI18n();
@@ -79,7 +79,7 @@ const Accounts = () => {
       return [];
     }
     return allAccounts.filter(
-      (account) => account && account.type !== "CREDIT" && account.type !== "SAVINGS"
+      (account) => account.type === 'SAVINGS'
     );
   }, [allAccounts]);
 
@@ -1014,4 +1014,4 @@ const Accounts = () => {
   );
 };
 
-export default Accounts;
+export default SavingAccounts;

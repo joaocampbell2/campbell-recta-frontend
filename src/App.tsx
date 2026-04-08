@@ -35,7 +35,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const Support = lazy(() => import('./pages/Support'));
-
+const SavingAccounts = lazy(() => import('./pages/SavingAccounts'))
 interface PrivateRouteProps {
   children: ReactNode;
 }
@@ -59,7 +59,7 @@ const PageLoader = () => (
 
 // Error fallback for lazy loaded modules
 const LazyLoadErrorFallback = ({ error, retry }: { error: Error; retry: () => void }) => {
-  const isChunkError = 
+  const isChunkError =
     error.message?.includes('Failed to fetch dynamically imported module') ||
     error.message?.includes('Loading chunk') ||
     error.message?.includes('Load chunk') ||
@@ -183,45 +183,46 @@ function AppRoutes() {
       <LazyLoadErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          {/* Landing page route - always accessible, even when logged in */}
-          <Route path="/home" element={<LandingPage />} />
-          <Route path="/" element={<LandingRoute />} />
-          {/* Legal and support pages - always accessible */}
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/support" element={<Support />} />
-          {/* Legacy route redirects - redirect old routes to new /app/* routes (preserves query strings) */}
-          <Route path="/transactions" element={<LegacyRouteRedirect to="/app/transactions" />} />
-          <Route path="/budgets" element={<LegacyRouteRedirect to="/app/budgets" />} />
-          <Route path="/recurring" element={<LegacyRouteRedirect to="/app/recurring" />} />
-          <Route path="/accounts" element={<LegacyRouteRedirect to="/app/accounts" />} />
-          <Route path="/goals" element={<LegacyRouteRedirect to="/app/goals" />} />
-          <Route path="/reports" element={<LegacyRouteRedirect to="/app/reports" />} />
-          <Route path="/settings" element={<LegacyRouteRedirect to="/app/settings" />} />
-          <Route
-            path="/app"
-            element={
-              <PrivateRoute>
-                <PrivateRoutesWrapper>
-                  <Layout />
-                </PrivateRoutesWrapper>
-              </PrivateRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="transactions" element={<Transactions />} />
-            <Route path="budgets" element={<Budgets />} />
-            <Route path="recurring" element={<RecurringTransactions />} />
-            <Route path="accounts" element={<Accounts />} />
-            <Route path="credit-cards" element={<CreditCards />} />
-            <Route path="goals" element={<SavingsGoals />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+            {/* Landing page route - always accessible, even when logged in */}
+            <Route path="/home" element={<LandingPage />} />
+            <Route path="/" element={<LandingRoute />} />
+            {/* Legal and support pages - always accessible */}
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/support" element={<Support />} />
+            {/* Legacy route redirects - redirect old routes to new /app/* routes (preserves query strings) */}
+            <Route path="/transactions" element={<LegacyRouteRedirect to="/app/transactions" />} />
+            <Route path="/budgets" element={<LegacyRouteRedirect to="/app/budgets" />} />
+            <Route path="/recurring" element={<LegacyRouteRedirect to="/app/recurring" />} />
+            <Route path="/accounts" element={<LegacyRouteRedirect to="/app/accounts" />} />
+            <Route path="/goals" element={<LegacyRouteRedirect to="/app/goals" />} />
+            <Route path="/reports" element={<LegacyRouteRedirect to="/app/reports" />} />
+            <Route path="/settings" element={<LegacyRouteRedirect to="/app/settings" />} />
+            <Route
+              path="/app"
+              element={
+                <PrivateRoute>
+                  <PrivateRoutesWrapper>
+                    <Layout />
+                  </PrivateRoutesWrapper>
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="transactions" element={<Transactions />} />
+              <Route path="budgets" element={<Budgets />} />
+              <Route path="recurring" element={<RecurringTransactions />} />
+              <Route path="accounts" element={<Accounts />} />
+              <Route path="credit-cards" element={<CreditCards />} />
+              <Route path="goals" element={<SavingsGoals />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="savings" element={<SavingAccounts />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </LazyLoadErrorBoundary>
     </>
   );
