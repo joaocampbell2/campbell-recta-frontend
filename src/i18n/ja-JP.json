@@ -412,6 +412,7 @@
   "categoryOTHER_EXPENSES": "その他の支出",
   "categoryTRANSFER": "内部振替",
   "categoryALLOCATION": "割り当て",
+  "categoryCREDIT_CARD_INVOICE": "クレジットカード請求書",
   "accountsDescription": "銀行口座、カード、投資を管理",
   "creditCardInitialDebtHint": "クレジットカードの場合、初期債務がない場合は0のままにしてください。債務はカードの購入から自動的に計算されます。",
   "recurringDescription": "自動的に繰り返される収入と支出を管理",

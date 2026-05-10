@@ -1,6 +1,6 @@
 import { startOfMonth, endOfMonth, isWithinInterval, subMonths, isBefore, isAfter, isSameDay, addDays, addWeeks, addMonths, addYears } from 'date-fns';
 import { Transaction, CategoryData, MonthlyComparison, RecurringTransaction, Account } from '../types';
-import { TransactionType, AccountType } from '../lib/enums';
+import { TransactionType, AccountType, CategoryName } from '../lib/enums';
 
 export const getTotalIncome = (transactions: Transaction[] | undefined): number => {
   if (!transactions || !Array.isArray(transactions)) {
@@ -16,7 +16,7 @@ export const getTotalExpense = (transactions: Transaction[] | undefined): number
     return 0;
   }
   return transactions
-    .filter(t => t.type === TransactionType.EXPENSE)
+    .filter(t => t.type === TransactionType.EXPENSE && t.categoryName !== 'TRANSFER' && t.categoryName !== CategoryName.CREDIT_CARD_INVOICE) // Excluir faturas de cartão de crédito (movimentações internas)
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 };
 
@@ -25,7 +25,7 @@ export const getBalance = (transactions: Transaction[] | undefined): number => {
 };
 
 export const getTransactionsByMonth = (transactions: Transaction[] | undefined, date: Date = new Date()): Transaction[] => {
-  if (!transactions || !Array.isArray(transactions)) {
+  if (! transactions || !Array.isArray(transactions)) {
     return [];
   }
   
@@ -49,10 +49,9 @@ export const getTransactionsByCategory = (transactions: Transaction[] | undefine
   
   transactions.forEach(t => {
     // Ignorar transferências e alocações
-    if (t.type === TransactionType.TRANSFER || t.type === TransactionType.ALLOCATION) {
+    if (t.type === TransactionType.TRANSFER || t.type === TransactionType.ALLOCATION || t.categoryName === CategoryName.CREDIT_CARD_INVOICE) {
       return;
     }
-    
     const category = t.category || 'Sem categoria';
     if (!categoryMap[category]) {
       categoryMap[category] = { receita: 0, despesa: 0 };

@@ -445,6 +445,7 @@
   "categoryOTHER_EXPENSES": "Otros Gastos",
   "categoryTRANSFER": "Movimiento Financiero",
   "categoryALLOCATION": "Asignación",
+  "categoryCREDIT_CARD_INVOICE": "Factura de Tarjeta de Crédito",
   "accountsDescription": "Gestiona tus cuentas bancarias, tarjetas e inversiones",
   "creditCardInitialDebtHint": "Para tarjetas de crédito, deja en 0 si no hay deuda inicial. La deuda se calculará automáticamente por las compras en la tarjeta.",
   "recurringDescription": "Gestiona tus ingresos y gastos que se repiten automáticamente",

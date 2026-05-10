@@ -412,6 +412,7 @@
   "categoryOTHER_EXPENSES": "مصروفات أخرى",
   "categoryTRANSFER": "حركة مالية داخلية",
   "categoryALLOCATION": "تخصيص",
+  "categoryCREDIT_CARD_INVOICE": "فاتورة بطاقة الائتمان",
   "accountsDescription": "إدارة حساباتك المصرفية وبطاقاتك واستثماراتك",
   "creditCardInitialDebtHint": "بالنسبة لبطاقات الائتمان، اتركه عند 0 إذا لم يكن هناك دين أولي. سيتم حساب الدين تلقائياً من مشتريات البطاقة.",
   "recurringDescription": "إدارة دخلك ومصروفاتك التي تتكرر تلقائياً",

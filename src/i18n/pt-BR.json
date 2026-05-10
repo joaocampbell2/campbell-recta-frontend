@@ -492,6 +492,7 @@
   "categoryOTHER_EXPENSES": "Outras Despesas",
   "categoryTRANSFER": "Movimentação Financeira",
   "categoryALLOCATION": "Alocação",
+  "categoryCREDIT_CARD_INVOICE": "Fatura Cartão",
   "accountsDescription": "Gerencie suas contas bancárias, cartões e investimentos",
   "creditCardInitialDebtHint": "Para cartões de crédito, deixe em 0 se não houver dívida inicial. A dívida será calculada automaticamente pelas compras no cartão.",
   "recurringDescription": "Gerencie suas receitas e despesas que se repetem automaticamente",

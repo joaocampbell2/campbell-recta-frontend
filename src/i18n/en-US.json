@@ -463,6 +463,7 @@
   "categoryOTHER_EXPENSES": "Other Expenses",
   "categoryTRANSFER": "Internal Transfer",
   "categoryALLOCATION": "Allocation",
+  "categoryCREDIT_CARD_INVOICE": "Credit Card Invoice",
   "accountsDescription": "Manage your bank accounts, cards and investments",
   "creditCardInitialDebtHint": "For credit cards, leave at 0 if there is no initial debt. The debt will be calculated automatically from card purchases.",
   "recurringDescription": "Manage your income and expenses that repeat automatically",

@@ -82,7 +82,7 @@ const CreditCards = () => {
     accountId: selectedAccountId,
     month: selectedMonthKey,
     householdId,
-    limit: 25,
+    limit: 100,
   });
   
   const invoiceData = invoiceResponse?.data;

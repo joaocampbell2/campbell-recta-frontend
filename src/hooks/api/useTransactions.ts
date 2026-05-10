@@ -728,6 +728,7 @@ export function usePayCreditCardInvoice() {
       month: string;
       description?: string;
       householdId?: string;
+      categoryName?: CategoryName;
     }) => {
       const response = await apiClient.post<{ success: boolean }>(
         `/transactions/credit-cards/${data.accountId}/pay-invoice`,
@@ -737,6 +738,7 @@ export function usePayCreditCardInvoice() {
           month: data.month,
           description: data.description,
           householdId: data.householdId,
+          categoryName: data.categoryName || CategoryName.CREDIT_CARD_INVOICE,
         }
       );
       return response.data!;

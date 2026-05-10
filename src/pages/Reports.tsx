@@ -328,7 +328,8 @@ const Reports = () => {
     const monthTransactions = getTransactionsByMonth(transactions, selectedMonth);
     const expenses = monthTransactions.filter(t => {
       if (t.type !== TransactionType.EXPENSE) return false;
-      if (t.type === TransactionType.TRANSFER || t.type === TransactionType.ALLOCATION) return false;
+      if (t.type === TransactionType.TRANSFER || t.type === TransactionType.ALLOCATION || t.categoryName === 'TRANSFER') return false;
+      if(t.categoryName=== CategoryName.CREDIT_CARD_INVOICE) return false;
       if (!t.accountId) return true;
       const account = accounts.find(a => a.id === t.accountId);
       if (account?.type === AccountType.CREDIT) return false;
@@ -362,7 +363,9 @@ const Reports = () => {
     const expenses = monthTransactions.filter(t => {
       if (!t.date) return false;
       if (t.type !== TransactionType.EXPENSE) return false;
-      if (t.type === TransactionType.TRANSFER || t.type === TransactionType.ALLOCATION) return false;
+      if (t.type === TransactionType.TRANSFER || t.type === TransactionType.ALLOCATION || t.categoryName === 'TRANSFER') return false;
+      if(t.categoryName=== CategoryName.CREDIT_CARD_INVOICE) return false;
+
       if (!t.accountId) return true;
       const account = accounts.find(a => a.id === t.accountId);
       if (account?.type === AccountType.CREDIT) return false;

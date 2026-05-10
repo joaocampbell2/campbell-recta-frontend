@@ -412,6 +412,7 @@
   "categoryOTHER_EXPENSES": "其他支出",
   "categoryTRANSFER": "内部转账",
   "categoryALLOCATION": "分配",
+  "categoryCREDIT_CARD_INVOICE": "信用卡发票",
   "accountsDescription": "管理您的银行账户、卡片和投资",
   "creditCardInitialDebtHint": "对于信用卡，如果没有初始债务，请保持为0。债务将根据卡片购买自动计算。",
   "recurringDescription": "管理自动重复的收入和支出",

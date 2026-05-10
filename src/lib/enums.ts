@@ -65,6 +65,7 @@ export enum CategoryName {
   // Internal movement categories
   TRANSFER = 'TRANSFER',
   ALLOCATION = 'ALLOCATION',
+  CREDIT_CARD_INVOICE = 'CUSTOM:e61a55a5-d8c4-4f6a-9a9b-272d740d125c',
 }
 
 export enum RecurrenceFrequency {
@@ -103,6 +104,7 @@ export const CATEGORY_NAME_TO_TRANSLATION_KEY: Record<CategoryName, string> = {
   [CategoryName.OTHER_EXPENSES]: 'categoryOTHER_EXPENSES',
   [CategoryName.TRANSFER]: 'categoryTRANSFER',
   [CategoryName.ALLOCATION]: 'categoryALLOCATION',
+  [CategoryName.CREDIT_CARD_INVOICE]: 'categoryCREDIT_CARD_INVOICE',
 };
 
 /**
@@ -133,6 +135,7 @@ export const CATEGORY_NAME_DISPLAY: Record<CategoryName, string> = {
   [CategoryName.OTHER_EXPENSES]: 'Outras Despesas',
   [CategoryName.TRANSFER]: 'Transferência',
   [CategoryName.ALLOCATION]: 'Alocação',
+  [CategoryName.CREDIT_CARD_INVOICE]: 'Fatura Cartão',
 };
 
 /**

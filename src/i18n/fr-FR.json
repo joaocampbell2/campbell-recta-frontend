@@ -445,6 +445,7 @@
   "categoryOTHER_EXPENSES": "Autres dépenses",
   "categoryTRANSFER": "Mouvement Financier",
   "categoryALLOCATION": "Allocation",
+  "categoryCREDIT_CARD_INVOICE": "Facture de Carte de Crédit",
   "accountsDescription": "Gérez vos comptes bancaires, cartes et investissements",
   "creditCardInitialDebtHint": "Pour les cartes de crédit, laissez à 0 s'il n'y a pas de dette initiale. La dette sera calculée automatiquement à partir des achats sur la carte.",
   "recurringDescription": "Gérez vos revenus et dépenses qui se répètent automatiquement",
