@@ -66,6 +66,7 @@ export enum CategoryName {
   TRANSFER = 'TRANSFER',
   ALLOCATION = 'ALLOCATION',
   CREDIT_CARD_INVOICE = 'CUSTOM:e61a55a5-d8c4-4f6a-9a9b-272d740d125c',
+  DEBTS = "CUSTOM:23aabe0f-3545-432b-b8dc-5fb73fcd119c"
 }
 
 export enum RecurrenceFrequency {

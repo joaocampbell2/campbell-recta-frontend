@@ -220,6 +220,7 @@ const CreditCards = () => {
         expenses: 0,
         incomes: 0,
         total: 0,
+        totalWithoutDebts: 0,
         previousBalance: 0,
         isPaid: false,
         paymentTransactions: [],
@@ -230,15 +231,29 @@ const CreditCards = () => {
     const paymentTransactions = (invoiceData.paymentTransactions || [])
       .map(convertTransaction)
       .filter((t): t is Transaction => t !== null); // Filter out null (invalid) transactions
+
+    const debtsExpenseAmount = (invoiceData.invoiceTransactions || [])
+      .filter(
+        (t) =>
+          t.type === TransactionType.EXPENSE &&
+          t.categoryName === CategoryName.DEBTS
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalWithoutDebts = Math.max(
+      0,
+      (invoiceData.total || 0) - debtsExpenseAmount
+    );
     
     return {
       expenses: invoiceData.currentExpenses || 0,
       incomes: invoiceData.currentPayments || 0,
       total: invoiceData.total || 0,
+      totalWithoutDebts,
       previousBalance: invoiceData.previousBalance || 0,
       isPaid: invoiceData.isPaid || false,
       paymentTransactions,
-    };
+    }; 
   }, [invoiceData, convertTransaction]);
 
   // Calcular fatura atual de cada cartão (para exibir nos cards de seleção)
@@ -839,6 +854,11 @@ const CreditCards = () => {
                   <div className="text-2xl font-light tracking-tight text-gray-900 dark:text-white">
                     {formatCurrency(invoiceStats.total, baseCurrency)}
                   </div>
+                  {invoiceStats.totalWithoutDebts > 0 && invoiceStats.totalWithoutDebts !== invoiceStats.total && (
+                    <div className="text-2xl font-light tracking-tight text-gray-900 dark:text-white">
+                      Valor sem dívidas: {formatCurrency(invoiceStats.totalWithoutDebts, baseCurrency)}
+                    </div>
+                  )}
                   <div className="text-[10px] font-light text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                     {t.dueDay} {selectedAccount.dueDay}/
                     {format(addMonths(selectedMonth, 1), "MM")}
