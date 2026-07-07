@@ -103,6 +103,8 @@
   "predictedBalance": "Predicted Balance",
   "creditCards": "Credit Cards",
   "creditCardsDescription": "Manage your credit cards, limits and invoices.",
+  "installments": "Installments",
+  "installmentsDescription": "Track and manage all your installment purchases.",
   "totalCreditLimit": "Total Consolidated",
   "allCreditCards": "All credit cards",
   "invoice": "Invoice",

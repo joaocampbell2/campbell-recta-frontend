@@ -99,6 +99,8 @@ export interface Translations {
   predictedBalance: string;
   creditCards: string;
   creditCardsDescription: string;
+  installments: string;
+  installmentsDescription: string;
   totalCreditLimit: string;
   allCreditCards: string;
   invoice: string;

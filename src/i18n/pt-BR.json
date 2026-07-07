@@ -78,6 +78,8 @@
   "predictedBalance": "Saldo Previsto",
   "creditCards": "Cartões de Crédito",
   "creditCardsDescription": "Gerencie seus cartões de crédito, limites e faturas.",
+  "installments": "Parcelamentos",
+  "installmentsDescription": "Acompanhe e gerencie todas as suas compras parceladas.",
   "totalCreditLimit": "Total Consolidado",
   "allCreditCards": "Todos os cartões de crédito",
   "invoice": "Fatura",

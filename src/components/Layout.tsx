@@ -20,6 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Piano,
+  BadgeDollarSign,
+  Receipt,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import MobileBanner from "./MobileBanner";
@@ -150,8 +152,10 @@ const Layout = () => {
     { path: "/app/transactions", label: t.transactions, icon: List },
     { path: "/app/accounts", label: t.accounts, icon: Wallet },
     { path: "/app/credit-cards", label: `${t.creditCards}`, icon: CreditCard },
+    { path: "/app/installments", label: t.installments || "Parcelamentos", icon: Receipt },
     { path: "/app/savings", label: `${t.savingsAccount}`, icon: PiggyBank },
     { path: "/app/recurring", label: t.recurring, icon: Repeat },
+    { path: "/app/loans", label: "Empréstimos", icon: BadgeDollarSign },
     { path: "/app/goals", label: t.goals, icon: Piano },
     { path: "/app/budgets", label: t.budgets, icon: Target },
     { path: "/app/reports", label: t.reports, icon: Wallet },
