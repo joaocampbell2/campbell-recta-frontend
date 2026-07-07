@@ -31,7 +31,7 @@ const RecurringTransactions = lazy(() => import('./pages/RecurringTransactions')
 const Accounts = lazy(() => import('./pages/Accounts'));
 const SavingsGoals = lazy(() => import('./pages/SavingsGoals'));
 const CreditCards = lazy(() => import('./pages/CreditCards'));
-const Loans = lazy(() => import('./pages/Loans'));
+// const Loans = lazy(() => import('./pages/Loans'));
 const Settings = lazy(() => import('./pages/Settings'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
@@ -217,7 +217,7 @@ function AppRoutes() {
               <Route path="recurring" element={<RecurringTransactions />} />
               <Route path="accounts" element={<Accounts />} />
               <Route path="credit-cards" element={<CreditCards />} />
-              <Route path="loans" element={<Loans />} />
+              {/* <Route path="loans" element={<Loans />} /> */}
               <Route path="goals" element={<SavingsGoals />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
