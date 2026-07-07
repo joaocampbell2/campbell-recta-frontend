@@ -96,6 +96,87 @@ export interface PaginatedTransactionsResponse {
   };
 }
 
+export interface InstallmentTransactionItem {
+  id: string;
+  installmentId: string;
+  description: string;
+  totalAmount: number;
+  installmentAmount: number;
+  account?: {
+    id: string;
+    name: string;
+    type: string;
+  };
+  endDate: string;
+  totalInstallments: number;
+  paidInstallmentsCount: number;
+  progress: string;
+  passedInstallmentsCount: number;
+  passedProgress: string;
+  transactions: {
+    id: string;
+    date: string;
+    installmentNumber: number;
+    paid: boolean;
+    amount: number;
+  }[];
+}
+
+export interface ListInstallmentTransactionsParams {
+  householdId?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface PaginatedInstallmentsResponse {
+  data: InstallmentTransactionItem[];
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+    total?: number;
+  };
+}
+
+/**
+ * List installment purchases of a household (grouped)
+ */
+export function useInstallmentTransactions(params: ListInstallmentTransactionsParams) {
+  const { currentUser } = useAuth();
+  const isAuthenticated = !!currentUser;
+
+  return useQuery({
+    queryKey: ['transactions', 'installments', params],
+    enabled: isAuthenticated && !!params.householdId,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+    queryFn: async () => {
+      // Remove undefined values
+      const queryParams: Record<string, unknown> = { ...params };
+      Object.keys(queryParams).forEach(key => {
+        if (queryParams[key] === undefined) {
+          delete queryParams[key];
+        }
+      });
+
+      const response = await apiClient.get<any>('/transactions/installments', queryParams);
+      const pagination = (response as any).pagination;
+
+      if (response.success && response.data) {
+        return {
+          data: response.data,
+          pagination: pagination || {
+            nextCursor: null,
+            hasMore: false,
+          },
+        } as PaginatedInstallmentsResponse;
+      }
+      return response as unknown as PaginatedInstallmentsResponse;
+    },
+  });
+}
+
+
 /**
  * List transactions with cursor-based pagination
  */
