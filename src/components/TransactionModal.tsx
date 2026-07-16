@@ -113,6 +113,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
 
 
   const isResettingRef = useRef(false);
+  const prevAccountIdRef = useRef<string>('');
 
   // Função para calcular próxima data de vencimento baseada na frequência
   const calculateNextDueDate = useCallback((startDate: Date, frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'): Date => {
@@ -367,12 +368,14 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
         type: transactionType,
         category: transaction.categoryName ?? transaction.category ?? '',
         date: tDate,
-        paid: true,
+        paid: transaction.paid !== undefined ? transaction.paid : true,
         accountId: accountId,
         installments: transaction.totalInstallments || 1,
         fromAccountId: transaction.fromAccountId ?? '',
         toAccountId: transaction.toAccountId ?? '',
       });
+
+      prevAccountIdRef.current = accountId;
 
       setTimeout(() => {
         isResettingRef.current = false;
@@ -409,6 +412,10 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
       // Se for contexto de cartão de crédito, sempre usar EXPENSE
       const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
 
+      const defaultAccount = accounts.find(a => a.id === selectedAccountId);
+      const isCreditCard = defaultAccount?.type === AccountType.CREDIT;
+      const initialPaid = isCreditCard ? false : (defaultPaid !== undefined ? defaultPaid : isPaidDefault);
+
       isResettingRef.current = true;
 
       reset({
@@ -417,12 +424,14 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
         type: defaultType,
         category: '',
         date: defaultDate,
-        paid: true,
+        paid: initialPaid,
         accountId: selectedAccountId,
         installments: 1,
         fromAccountId: '',
         toAccountId: '',
       });
+
+      prevAccountIdRef.current = selectedAccountId;
 
       setTimeout(() => {
         isResettingRef.current = false;
@@ -436,6 +445,26 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transaction?.id, defaultAccountId, defaultPaid]);
+
+  // Ao mudar a conta selecionada para uma transação nova, se for cartão de crédito, define como não pago por default
+  useEffect(() => {
+    if (transaction) return; // Apenas para novas transações
+    if (isResettingRef.current) return;
+
+    const prevAccountId = prevAccountIdRef.current;
+    if (selectedAccountId && selectedAccountId !== prevAccountId) {
+      const prevAccount = accounts.find(a => a.id === prevAccountId);
+      const newAccount = accounts.find(a => a.id === selectedAccountId);
+
+      const prevIsCredit = prevAccount?.type === AccountType.CREDIT;
+      const newIsCredit = newAccount?.type === AccountType.CREDIT;
+
+      if (newIsCredit !== prevIsCredit) {
+        setValue('paid', !newIsCredit, { shouldValidate: true });
+      }
+      prevAccountIdRef.current = selectedAccountId;
+    }
+  }, [selectedAccountId, accounts, transaction, setValue]);
 
   // Dividir automaticamente quando isSplit é ativado pela primeira vez ou quando o número de membros muda
   // Não recalcular quando o valor muda para não sobrescrever edições manuais
@@ -773,6 +802,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             selectedAccountId = availableAccounts[0].id || '';
           }
 
+          const isCreditCard = accounts.find(a => a.id === selectedAccountId)?.type === AccountType.CREDIT;
           isResettingRef.current = true;
           reset({
             description: '',
@@ -780,12 +810,13 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             type: data.type,
             category: data.category,
             date: data.date,
-            paid: true,
+            paid: isCreditCard ? false : true,
             accountId: selectedAccountId,
             fromAccountId: '',
             toAccountId: '',
             installments: 1,
           });
+          prevAccountIdRef.current = selectedAccountId;
 
           setTimeout(() => {
             isResettingRef.current = false;
@@ -815,6 +846,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             selectedAccountId = availableAccounts[0].id || '';
           }
 
+          const isCreditCard = accounts.find(a => a.id === selectedAccountId)?.type === AccountType.CREDIT;
           isResettingRef.current = true;
           // const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
           reset({
@@ -823,12 +855,13 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             type: data.type,
             category: data.category,
             date: data.date,
-            paid: true,
+            paid: isCreditCard ? false : true,
             accountId: selectedAccountId,
             fromAccountId: '',
             toAccountId: '',
             installments: 1,
           });
+          prevAccountIdRef.current = selectedAccountId;
 
           setTimeout(() => {
             isResettingRef.current = false;
@@ -856,6 +889,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
           if (!selectedAccountId && availableAccounts.length > 0) {
             selectedAccountId = availableAccounts[0].id || '';
           }
+          const isCreditCard = accounts.find(a => a.id === selectedAccountId)?.type === AccountType.CREDIT;
           isResettingRef.current = true;
           // const defaultType = isCreditCardContext ? TransactionType.EXPENSE : TransactionType.EXPENSE;
           reset({
@@ -864,12 +898,13 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             type: data.type,
             category: data.category,
             date: data.date,
-            paid: true,
+            paid: isCreditCard ? false : true,
             accountId: selectedAccountId,
             fromAccountId: '',
             toAccountId: '',
             installments: 1,
           });
+          prevAccountIdRef.current = selectedAccountId;
           setTimeout(() => {
             isResettingRef.current = false;
           }, 0);
