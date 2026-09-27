@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
+  HelpCircle,
 } from "lucide-react";
 import { AccountActionsMenu } from "../components/AccountActionsMenu";
 import {
@@ -439,11 +440,11 @@ const CreditCards = () => {
     setConfirmDeleteAccountModal({ isOpen: true, accountId });
   };
 
-  const handleConfirmDeleteAccount = async () => {
+  const handleConfirmDeleteAccount = async (deleteTransactions = false) => {
     if (!confirmDeleteAccountModal.accountId) return;
 
     try {
-      await deleteAccount(confirmDeleteAccountModal.accountId);
+      await deleteAccount(confirmDeleteAccountModal.accountId, deleteTransactions);
       success(t.accountDeleted);
       setConfirmDeleteAccountModal({ isOpen: false, accountId: null });
       setSelectedAccountId(null);
@@ -783,9 +784,12 @@ const CreditCards = () => {
                         {t.bestDayToBuy}
                       </div>
                       <span className="text-sm font-light text-green-500">
-                        {selectedAccount.dueDay - 10 <= 0
-                          ? 30 + (selectedAccount.dueDay - 10)
-                          : selectedAccount.dueDay - 10}
+                        {(() => {
+                          const offset = selectedAccount.bestDayOffset ?? 10;
+                          const baseDay = selectedAccount.closingDay ?? selectedAccount.dueDay ?? 1;
+                          const result = baseDay - offset;
+                          return result <= 0 ? 30 + result : result;
+                        })()}
                       </span>
                     </div>
                   )}
@@ -833,9 +837,12 @@ const CreditCards = () => {
                     {selectedAccount.dueDay && (
                       <span className="text-xs text-primary-600 dark:text-primary-400 font-light mt-1">
                         {t.bestDayToBuy}:{" "}
-                        {selectedAccount.dueDay - 10 <= 0
-                          ? 30 + (selectedAccount.dueDay - 10)
-                          : selectedAccount.dueDay - 10}
+                        {(() => {
+                          const offset = selectedAccount.bestDayOffset ?? 10;
+                          const baseDay = selectedAccount.closingDay ?? selectedAccount.dueDay ?? 1;
+                          const result = baseDay - offset;
+                          return result <= 0 ? 30 + result : result;
+                        })()}
                       </span>
                     )}
                   </div>
@@ -900,8 +907,15 @@ const CreditCards = () => {
                           <div className="flex items-center gap-3">
                             <Clock className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                             <div>
-                              <div className="text-sm font-light text-gray-500 dark:text-gray-400">
+                              <div className="text-sm font-light text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
                                 {t.previousBalance}
+                                <span
+                                  className="inline-flex text-gray-400 dark:text-gray-500 cursor-help"
+                                  title={t.previousBalanceTooltip}
+                                  aria-label={t.previousBalanceTooltip}
+                                >
+                                  <HelpCircle className="h-3.5 w-3.5" />
+                                </span>
                               </div>
                             </div>
                           </div>

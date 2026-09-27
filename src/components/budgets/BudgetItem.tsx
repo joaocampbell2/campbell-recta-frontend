@@ -1,6 +1,7 @@
 import { Budget } from '../../types';
 import { formatCurrency } from '../../utils/format';
 import { BudgetActionsMenu } from '../BudgetActionsMenu';
+import { isGeneralBudget } from '../../utils/categories';
 
 interface BudgetItemProps {
   budget: Budget & {
@@ -27,7 +28,7 @@ export const BudgetItem = ({
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-light tracking-tight text-gray-900 dark:text-white mb-4">
-            {budget.category === 'Geral' ? t.general : budget.category}
+            {isGeneralBudget(budget) ? t.general : budget.category}
           </h3>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">

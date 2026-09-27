@@ -96,6 +96,7 @@ export interface Account {
   availableLimit?: number; // Limite disponível (totalLimit - dívida atual)
   dueDay?: number; // Dia de vencimento da fatura (1-31)
   closingDay?: number; // Dia de fechamento da fatura (1-31)
+  bestDayOffset?: number; // Dias antes do vencimento para o melhor dia de compra (1-30)
   linkedAccountId?: string; // ID da conta bancária vinculada (para herdar cor)
   // Campos para contas compartilhadas
   isPersonal?: boolean; // true se for conta pessoal compartilhada
@@ -155,7 +156,7 @@ export interface TransactionsContextType {
   deleteRecurringTransaction: (id: string) => Promise<void>;
   addAccount: (account: Omit<Account, 'id' | 'userId'>) => Promise<void>;
   updateAccount: (id: string, account: Partial<Account>) => Promise<void>;
-  deleteAccount: (id: string) => Promise<void>;
+  deleteAccount: (id: string, deleteTransactions?: boolean) => Promise<void>;
   addSavingsGoal: (goal: Omit<SavingsGoal, 'id' | 'userId'>) => Promise<void>;
   updateSavingsGoal: (id: string, goal: Partial<SavingsGoal>) => Promise<void>;
   deleteSavingsGoal: (id: string) => Promise<void>;

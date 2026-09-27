@@ -15,6 +15,7 @@ import { BudgetsSkeleton } from '../components/PageSkeletons';
 import { DatePicker } from '../components/DatePicker';
 import { TransactionType } from '../lib/enums';
 import { BudgetList } from '../components/budgets';
+import { isGeneralBudget } from '../utils/categories';
 
 const Budgets = () => {
   const { budgets, transactions, deleteBudget, loading } = useTransactions();
@@ -81,8 +82,11 @@ const Budgets = () => {
   const budgetStatus = useMemo(() => {
     return monthBudgets.map(budget => {
       let spent = 0;
-      
-      if (budget.category === 'Geral') {
+
+      // Treat the "GENERAL" pseudo-category as the "total spending/income of
+      // the month" budget. Detection uses categoryName, since `category` holds
+      // the localized display name (e.g. "Geral (Todas as categorias)").
+      if (isGeneralBudget(budget)) {
         if (budget.type === TransactionType.EXPENSE) {
           spent = getTotalExpense(monthTransactions);
         } else {
@@ -90,20 +94,23 @@ const Budgets = () => {
         }
       } else {
         const categoryTransactions = categoryData.find(c => c.name === budget.category);
-        spent = budget.type === TransactionType.EXPENSE 
+        spent = budget.type === TransactionType.EXPENSE
           ? (categoryTransactions?.despesa || 0)
           : (categoryTransactions?.receita || 0);
       }
-      
+
       const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
       const remaining = budget.amount - spent;
-      
+
+      const status: 'ok' | 'warning' | 'exceeded' =
+        percentage >= 100 ? 'exceeded' : percentage >= 80 ? 'warning' : 'ok';
+
       return {
         ...budget,
         spent,
         remaining,
         percentage,
-        status: percentage >= 100 ? 'exceeded' : percentage >= 80 ? 'warning' : 'ok',
+        status,
       };
     });
   }, [monthBudgets, categoryData, monthTransactions]);

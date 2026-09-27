@@ -1,0 +1,97 @@
+---
+description: Visão geral e estrutura do web app Recta
+alwaysApply: true
+---
+
+# Web App Recta - Visão Geral
+
+## Stack Tecnológico
+
+- **Framework**: React 18
+- **Build Tool**: Vite 7
+- **Language**: TypeScript 5.3
+- **Styling**: Tailwind CSS 3.4
+- **State Management**: React Query 5 (TanStack Query)
+- **Forms**: React Hook Form 7 + Zod
+- **Routing**: React Router 6
+- **Charts**: Recharts 2
+- **Icons**: Lucide React
+- **Auth**: Firebase
+- **HTTP Client**: Axios
+
+## Estrutura de Diretórios
+
+```
+src/
+├── components/          # Componentes reutilizáveis
+│   ├── ui/              # Componentes base (Button, Input, etc)
+│   └── ...              # Componentes específicos
+├── pages/               # Páginas/rotas
+├── hooks/               # Custom hooks
+│   ├── api/             # Hooks de API (React Query)
+│   └── ...              # Outros hooks
+├── context/             # React Context providers
+├── lib/                 # Bibliotecas/configurações
+│   ├── queryClient.ts   # Config React Query
+│   └── enums.ts         # Enums compartilhados
+├── utils/               # Funções utilitárias
+│   ├── api.ts           # Cliente Axios configurado
+│   ├── format.ts         # Formatação (currency, date)
+│   └── ...              # Outros utilitários
+├── config/              # Configurações (Firebase, etc)
+├── types/               # Tipos TypeScript globais
+└── App.tsx              # Root component
+```
+
+## Rotas Principais
+
+- `/` - Landing page
+- `/login` - Login
+- `/app` - Dashboard (privado)
+- `/app/transactions` - Transações
+- `/app/accounts` - Contas
+- `/app/budgets` - Orçamentos
+- `/app/recurring` - Transações recorrentes
+- `/app/savings-goals` - Metas de economia
+- `/app/reports` - Relatórios
+- `/app/settings` - Configurações
+
+## Contextos Disponíveis
+
+- `AuthContext` - Autenticação e usuário atual
+- `TransactionsContext` - Estado de transações (legado, migrando para React Query)
+- `ThemeContext` - Tema claro/escuro
+- `I18nContext` - Internacionalização (PT/EN/AR)
+- `CurrencyContext` - Moeda e formatação
+- `ToastContext` - Notificações toast
+- `CommandMenuContext` - Menu de comandos (Cmd+K)
+
+## API Client
+
+- Base URL: `VITE_API_BASE_URL` ou `http://localhost:3000`
+- Cliente: `src/utils/api.ts` - Axios configurado
+- Auth: Token Firebase adicionado automaticamente via interceptor
+- Erros: `NetworkError` para erros de rede, `AppError` para erros da API
+
+## React Query
+
+- Config: `src/lib/queryClient.ts`
+- Query Keys: Centralizadas em cada hook
+- DevTools: Habilitado em desenvolvimento
+- Cache: 5 minutos padrão, staleTime configurável
+
+## Convenções
+
+1. **Lazy Loading**: Páginas carregadas com `lazy()` para code splitting
+2. **TypeScript**: Tipagem estrita, evitar `any`
+3. **Forms**: Sempre usar React Hook Form + Zod
+4. **Styling**: Tailwind CSS, classes utilitárias
+5. **Components**: Functional components, hooks para lógica
+6. **Error Handling**: Sempre tratar erros de API
+
+## Performance
+
+- Code splitting automático com Vite
+- Lazy loading de rotas
+- React Query para cache e sincronização
+- Memoização quando necessário (useMemo, useCallback)

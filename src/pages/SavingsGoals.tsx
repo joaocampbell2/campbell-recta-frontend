@@ -10,10 +10,10 @@ import { useCommandMenu } from '../context/CommandMenuContext';
 import { useCurrencyMask } from '../hooks/useCurrencyMask';
 import { formatCurrency, formatDate } from '../utils/format';
 import { parseCurrencyValue } from '../utils/currency';
-import { Plus, Target, X } from 'lucide-react';
+import { Plus, Target, X, Link2 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { SavingsGoalsActionsMenu } from '../components/SavingsGoalsActionsMenu';
-import { SavingsGoal } from '../types';
+import { SavingsGoal, Account } from '../types';
 import { differenceInDays } from 'date-fns';
 import { createSchemas, SavingsGoalFormData } from '../schemas';
 import { PageHeader } from '../components/PageHeader';
@@ -21,6 +21,29 @@ import { PageButton } from '../components/PageButton';
 import { SavingsGoalsSkeleton } from '../components/PageSkeletons';
 import SelectCombobox from '../components/SelectCombobox';
 import { DatePicker } from '../components/DatePicker';
+import { AccountType } from '../lib/enums';
+
+/**
+ * Resolve the currentAmount for display:
+ * - If the goal is linked to an investment account, sync to the account balance
+ *   so the meta (goal) reflects the money actually stored there.
+ * - Otherwise, use the manually tracked currentAmount.
+ */
+function resolveGoalCurrentAmount(goal: SavingsGoal, accounts: Account[]): number {
+  if (goal.accountId) {
+    const linkedAccount = accounts.find((a) => a.id === goal.accountId);
+    if (linkedAccount && linkedAccount.type === AccountType.INVESTMENT) {
+      return Math.max(0, Number(linkedAccount.totalBalance ?? linkedAccount.balance ?? 0));
+    }
+  }
+  return goal.currentAmount;
+}
+
+function isGoalSyncedWithInvestment(goal: SavingsGoal, accounts: Account[]): boolean {
+  if (!goal.accountId) return false;
+  const linkedAccount = accounts.find((a) => a.id === goal.accountId);
+  return !!linkedAccount && linkedAccount.type === AccountType.INVESTMENT;
+}
 
 const SavingsGoals = () => {
   const { savingsGoals, accounts, addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, loading } = useTransactions();
@@ -125,10 +148,17 @@ const SavingsGoals = () => {
 
   const onSubmit = async (data: SavingsGoalFormData) => {
     try {
+      // When linked to an investment account, currentAmount is auto-derived
+      // from the account balance at render time. Send the synced value so
+      // server-side views stay consistent until next sync.
+      const resolvedCurrentAmount = isLinkedToInvestment
+        ? Math.max(0, Number(linkedAccount?.totalBalance ?? linkedAccount?.balance ?? 0))
+        : data.currentAmount || 0;
+
       const goalData: Omit<SavingsGoal, 'id' | 'userId'> = {
         name: data.name,
         targetAmount: data.targetAmount,
-        currentAmount: data.currentAmount || 0,
+        currentAmount: resolvedCurrentAmount,
         targetDate: data.targetDate,
         accountId: data.accountId || undefined,
       };
@@ -165,6 +195,16 @@ const SavingsGoals = () => {
   const watchedTargetAmount = watch('targetAmount');
   const watchedCurrentAmount = watch('currentAmount');
   const watchedTargetDate = watch('targetDate');
+  const watchedAccountId = watch('accountId');
+
+  // Detect when the goal is linked to an investment account: in that case
+  // currentAmount is auto-synced with the linked account balance.
+  const linkedAccount = useMemo(
+    () => accounts.find((a) => a.id === watchedAccountId) || null,
+    [accounts, watchedAccountId]
+  );
+  const isLinkedToInvestment =
+    !!linkedAccount && linkedAccount.type === AccountType.INVESTMENT;
   
   const monthlySavingsNeeded = useMemo(() => {
     const targetAmount = watchedTargetAmount || 0;
@@ -237,8 +277,10 @@ const SavingsGoals = () => {
           </div>
         ) : (
           savingsGoals.map((goal) => {
-            const progress = (goal.currentAmount / goal.targetAmount) * 100;
-            const remaining = goal.targetAmount - goal.currentAmount;
+            const isSynced = isGoalSyncedWithInvestment(goal, accounts);
+            const displayCurrentAmount = resolveGoalCurrentAmount(goal, accounts);
+            const progress = goal.targetAmount > 0 ? (displayCurrentAmount / goal.targetAmount) * 100 : 0;
+            const remaining = goal.targetAmount - displayCurrentAmount;
             const daysRemaining = goal.targetDate 
               ? Math.ceil((goal.targetDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
               : null;
@@ -268,7 +310,7 @@ const SavingsGoals = () => {
                 return null;
               }
 
-              const remainingAmount = goal.targetAmount - goal.currentAmount;
+              const remainingAmount = goal.targetAmount - displayCurrentAmount;
               
               if (remainingAmount <= 0) {
                 return null;
@@ -301,7 +343,7 @@ const SavingsGoals = () => {
 
                 <div className="mb-6">
                   <div className="flex justify-between text-sm font-light text-gray-500 dark:text-gray-400 mb-2">
-                    <span>{formatCurrency(goal.currentAmount, baseCurrency)}</span>
+                    <span>{formatCurrency(displayCurrentAmount, baseCurrency)}</span>
                     <span>{formatCurrency(goal.targetAmount, baseCurrency)}</span>
                   </div>
                   <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1">
@@ -334,10 +376,19 @@ const SavingsGoals = () => {
                     </div>
                   )}
                   {goal.accountId && (
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="font-medium text-gray-500 dark:text-gray-300">{t.account}:</span>
-                      <span className="font-light text-gray-900 dark:text-white">
+                      <span className="font-light text-gray-900 dark:text-white inline-flex items-center gap-2">
                         {accounts.find(a => a.id === goal.accountId)?.name || t.notAvailable}
+                        {isSynced && (
+                          <span
+                            className="inline-flex items-center gap-1 text-xs font-light text-green-600 dark:text-green-400"
+                            title={t.goalSyncedWithAccount || 'Sincronizado com o saldo da conta'}
+                          >
+                            <Link2 className="h-3 w-3" />
+                            {t.synced || 'sync'}
+                          </span>
+                        )}
                       </span>
                     </div>
                   )}
@@ -437,7 +488,19 @@ const SavingsGoals = () => {
                 </label>
                 <input
                   type="text"
-                  value={currentAmountMask.value}
+                  value={
+                    isLinkedToInvestment
+                      ? formatCurrency(
+                          Math.max(
+                            0,
+                            Number(linkedAccount?.totalBalance ?? linkedAccount?.balance ?? 0)
+                          ),
+                          baseCurrency
+                        )
+                      : currentAmountMask.value
+                  }
+                  readOnly={isLinkedToInvestment}
+                  disabled={isLinkedToInvestment}
                   onChange={(e) => {
                     currentAmountMask.onChange(e);
                     const numericValue = parseCurrencyValue(e.target.value);
@@ -445,6 +508,8 @@ const SavingsGoals = () => {
                   }}
                   placeholder={t.currencyPlaceholder}
                   className={`block w-full px-3 py-2.5 border rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 dark:focus:border-primary-500 sm:text-sm font-light tracking-tight ${
+                    isLinkedToInvestment ? 'cursor-not-allowed opacity-70' : ''
+                  } ${
                     errors.currentAmount ? 'border-red-300 dark:border-red-600' : 'border-gray-200 dark:border-gray-800'
                   }`}
                 />
@@ -454,6 +519,13 @@ const SavingsGoals = () => {
                     valueAsNumber: true,
                   })}
                 />
+                {isLinkedToInvestment ? (
+                  <p className="mt-1 text-xs font-light text-gray-400 dark:text-gray-500 inline-flex items-center gap-1">
+                    <Link2 className="h-3 w-3" />
+                    {t.goalSyncedWithAccount ||
+                      'Vinculado a uma conta de investimento. O valor atual é sincronizado automaticamente com o saldo da conta.'}
+                  </p>
+                ) : null}
                 {errors.currentAmount && (
                   <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.currentAmount.message}</p>
                 )}

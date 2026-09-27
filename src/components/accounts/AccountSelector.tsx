@@ -1,7 +1,8 @@
 import { Account } from '../../types';
 import { formatCurrency } from '../../utils/format';
 import { getAccountBalance } from '../../utils/accountBalance';
-import { CreditCard, Wallet, PiggyBank, Banknote, Plus, Share2 } from 'lucide-react';
+import { CreditCard, Wallet, PiggyBank, Banknote, Plus, Share2, TrendingUp } from 'lucide-react';
+import { getAccountTypeLabel } from '../../constants/accountTypes';
 
 interface AccountSelectorProps {
   accounts: Account[];
@@ -23,21 +24,10 @@ const getAccountIcon = (type: string) => {
       return PiggyBank;
     case "CASH":
       return Banknote;
+    case "INVESTMENT":
+      return TrendingUp;
     default:
       return Wallet;
-  }
-};
-
-const getAccountTypeLabel = (type: string, t: Record<string, string>) => {
-  switch (type) {
-    case "CHECKING":
-      return t.checkingAccount;
-    case "SAVINGS":
-      return t.savingsAccount;
-    case "CASH":
-      return t.cash;
-    default:
-      return type;
   }
 };
 
@@ -95,7 +85,7 @@ export const AccountSelector = ({
                 {formatCurrency(balances.totalBalance, baseCurrency)}
               </div>
               <div className="text-[10px] font-light text-gray-400 dark:text-gray-500 mt-0.5">
-                {getAccountTypeLabel(account.type, t)}
+                {getAccountTypeLabel(account.type as any, t)}
                 {isSharedAccount && accountOwnerMember && (
                   <span className="ml-1 text-blue-500">
                     • {accountOwnerMember.user?.displayName || accountOwnerMember.user?.email?.split('@')[0] || 'Compartilhada'}

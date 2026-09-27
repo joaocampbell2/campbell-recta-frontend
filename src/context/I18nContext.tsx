@@ -109,6 +109,8 @@ export interface Translations {
   closingDay: string;
   closingDayHint: string;
   bestDayToBuy: string;
+  bestDayOffset: string;
+  bestDayOffsetHint: string;
   payInvoice: string;
   payInvoiceDescription: string;
   paymentAccount: string;
@@ -120,6 +122,7 @@ export interface Translations {
   invoicePaymentUndone: string;
   newCreditCard: string;
   previousBalance: string;
+  previousBalanceTooltip: string;
   deleteAllSubsequentInstallments: string;
   deleteAllSubsequentHint: string;
   installmentDeleteTitle: string;
@@ -348,6 +351,9 @@ export interface Translations {
   monthlySavingsNeeded: string;
   perMonth: string;
   toReachGoal: string;
+  goalSyncedWithAccount: string;
+  synced: string;
+  filters: string;
   
   // Recurring
   newRecurring: string;
@@ -498,6 +504,8 @@ export interface Translations {
   deleteBankAccount: string;
   deleteAccountWarning: string;
   deleteAccountTransactionsWarning: string;
+  deleteAccountAndTransactionsWarning: string;
+  deleteLinkedTransactions: string;
   deleteUserAccount: string;
   deleteUserAccountWarning: string;
   confirmPassword: string;
@@ -897,7 +905,17 @@ export interface Translations {
   whatsNewMigrationRecommendation: string;
   whatsNewUnderstand: string;
   whatsNewContinue: string;
-  
+  // What's New - v0.5.0
+  whatsNewV05CardsTitle: string;
+  whatsNewV05Cards1: string;
+  whatsNewV05Cards2: string;
+  whatsNewV05BudgetsTitle: string;
+  whatsNewV05Budgets1: string;
+  whatsNewV05Budgets2: string;
+  whatsNewV05Budgets3: string;
+  whatsNewV05ForecastTitle: string;
+  whatsNewV05ForecastText: string;
+
   // UI Labels
   appNameWithBeta: string;
   openMenu: string;

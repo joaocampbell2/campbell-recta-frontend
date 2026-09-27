@@ -1,0 +1,158 @@
+---
+description: Otimizações para reduzir uso de tokens
+alwaysApply: true
+---
+
+# Otimizações - Web App
+
+## Reduzir Leitura de Arquivos
+
+### 1. Usar Imports Específicos
+
+```typescript
+// ❌ BAD
+import * as utils from './utils';
+
+// ✅ GOOD
+import { formatCurrency, parseDate } from './utils';
+```
+
+### 2. Evitar Ler Arquivos Grandes
+
+- Usar `grep` para encontrar funções específicas
+- Ler apenas seções necessárias
+- Não ler `node_modules` ou arquivos gerados
+
+### 3. Reutilizar Hooks e Utilitários
+
+```typescript
+// ❌ BAD - Duplicar lógica
+const { data } = useQuery({
+  queryKey: ['transactions'],
+  queryFn: () => api.get('/transactions'),
+});
+
+// ✅ GOOD - Usar hook existente
+const { data } = useTransactions({ householdId });
+```
+
+## Código Conciso
+
+### 1. Extrair Lógica Complexa
+
+```typescript
+// ❌ BAD - Lógica inline
+const filtered = data
+  .filter(x => x.status === 'active')
+  .map(x => ({ ...x, total: x.items.reduce((sum, i) => sum + i.value, 0) }))
+  .sort((a, b) => b.total - a.total);
+
+// ✅ GOOD - Extrair função
+const filtered = processTransactions(data);
+```
+
+### 2. Componentes Pequenos
+
+```typescript
+// ❌ BAD - Componente gigante
+function Dashboard() {
+  // 500 linhas...
+}
+
+// ✅ GOOD - Componentes focados
+function Dashboard() {
+  return (
+    <div>
+      <SummaryCards />
+      <RecentTransactions />
+      <Charts />
+    </div>
+  );
+}
+```
+
+### 3. Tipos Nomeados
+
+```typescript
+// ❌ BAD - Tipos inline
+function process(data: {
+  items: Array<{ id: string; value: number; metadata?: { tags: string[] } }>;
+}) { }
+
+// ✅ GOOD - Tipos nomeados
+interface ItemMetadata {
+  tags: string[];
+}
+
+interface Item {
+  id: string;
+  value: number;
+  metadata?: ItemMetadata;
+}
+
+function process(data: { items: Item[] }) { }
+```
+
+## React Query Otimizado
+
+### 1. Query Keys Centralizadas
+
+```typescript
+// ✅ GOOD - Keys organizadas
+export const queryKeys = {
+  transactions: {
+    all: ['transactions'] as const,
+    lists: () => [...queryKeys.transactions.all, 'list'] as const,
+    list: (params: ListParams) => [...queryKeys.transactions.lists(), params] as const,
+    detail: (id: string) => [...queryKeys.transactions.all, 'detail', id] as const,
+  },
+};
+```
+
+### 2. Stale Time Apropriado
+
+```typescript
+// ✅ GOOD - Configurar staleTime baseado no tipo de dado
+useQuery({
+  queryKey: ['categories'], // Dados raramente mudam
+  queryFn: fetchCategories,
+  staleTime: 30 * 60 * 1000, // 30 minutos
+});
+
+useQuery({
+  queryKey: ['transactions'], // Dados mudam frequentemente
+  queryFn: fetchTransactions,
+  staleTime: 1 * 60 * 1000, // 1 minuto
+});
+```
+
+### 3. Enabled Condicional
+
+```typescript
+// ✅ GOOD - Só buscar quando necessário
+const { data } = useQuery({
+  queryKey: ['account', accountId],
+  queryFn: () => fetchAccount(accountId),
+  enabled: !!accountId, // Só busca se accountId existir
+});
+```
+
+## Evitar Re-renders Desnecessários
+
+```typescript
+// ✅ GOOD - Memoizar valores computados
+const total = useMemo(
+  () => transactions.reduce((sum, t) => sum + t.amount, 0),
+  [transactions]
+);
+
+// ✅ GOOD - Memoizar callbacks
+const handleClick = useCallback(() => {
+  doSomething(id);
+}, [id]);
+
+// ✅ GOOD - React.memo para componentes pesados
+export const ExpensiveComponent = React.memo(({ data }: Props) => {
+  // ...
+});
+```

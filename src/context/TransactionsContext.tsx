@@ -51,7 +51,7 @@ import {
 } from '../types';
 import { addMonths, startOfMonth, isSameMonth } from 'date-fns';
 import { analyticsHelpers } from '../utils/analytics';
-import { CategoryName, CategoryType, RecurrenceFrequency, getCategoryDisplayName, getCategoryNameFromDisplay, parseCategoryName, getAllCategoryNames, getCategoriesByType, TransactionType, isCustomCategoryName, toCategoryName, CUSTOM_CATEGORY_PREFIX, CustomCategoryInfo } from '../lib/enums';
+import { CategoryName, CategoryType, RecurrenceFrequency, getCategoryDisplayName, getCategoryNameFromDisplay, parseCategoryName, getAllCategoryNames, getCategoriesByType, TransactionType, AccountType, isCustomCategoryName, toCategoryName, CUSTOM_CATEGORY_PREFIX, CustomCategoryInfo } from '../lib/enums';
 import { useI18n } from './I18nContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCategories } from '../hooks/api/useCategories';
@@ -229,6 +229,7 @@ const convertAccountFromBackend = (a: BackendAccount): Account => {
     availableLimit: (a.availableLimit !== null && a.availableLimit !== undefined) ? Number(a.availableLimit) : undefined,
     dueDay: a.dueDay,
     closingDay: a.closingDay,
+    bestDayOffset: a.bestDayOffset,
     linkedAccountId: a.linkedAccountId,
     isPersonal: (a as any).isPersonal,
     accountOwnerId: (a as any).accountOwnerId || null,
@@ -251,10 +252,16 @@ const convertBudgetFromBackend = (b: BackendBudget, translations?: Record<string
   } catch {
     parsedMonth = startOfMonth(new Date());
   }
+  // Preserve the GENERAL pseudo-category as-is so the UI keeps recognising it.
+  // Fall back to OTHER_EXPENSES only when the backend omits categoryName entirely.
   const categoryName = (b.categoryName || 'OTHER_EXPENSES') as string;
+  const displayCategory =
+    categoryName === 'GENERAL'
+      ? translations?.general || 'Geral'
+      : getCategoryDisplayName(categoryName, translations, custom as CustomCategoryInfo[] | undefined);
   return {
     id: b.id,
-    category: getCategoryDisplayName(categoryName, translations, custom as CustomCategoryInfo[] | undefined),
+    category: displayCategory,
     categoryName,
     amount: Number(b.monthlyLimit),
     month: parsedMonth,
@@ -561,11 +568,14 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
 
     let categoryName = toCategoryName(budget.category, t as unknown as Record<string, string>, custom as CustomCategoryInfo[] | undefined) ?? parseCategoryName(budget.category ?? '');
     if (!categoryName) {
-      const categoryLower = (budget.category ?? '').toLowerCase().trim();
-      if (categoryLower === 'geral' || categoryLower === 'general' || categoryLower.includes('geral')) {
-        categoryName = budget.type === TransactionType.INCOME ? CategoryName.OTHER_INCOME : CategoryName.OTHER_EXPENSES;
+      // "General" / "Geral" is a special pseudo-category for budgets that represents
+      // the total spending/income for the month. Send it as-is to the backend so it is
+      // not silently transformed into OTHER_EXPENSES.
+      const trimmed = (budget.category ?? '').trim();
+      if (trimmed === 'Geral' || trimmed === 'General' || trimmed === 'GENERAL') {
+        categoryName = 'GENERAL';
       } else {
-        const foundCategory = categories.find(c => c.name.toLowerCase().trim() === categoryLower);
+        const foundCategory = categories.find(c => c.name.toLowerCase().trim() === trimmed.toLowerCase());
         if (foundCategory) {
           categoryName = toCategoryName(foundCategory.name, t as unknown as Record<string, string>, custom as CustomCategoryInfo[] | undefined) ?? getCategoryNameFromDisplay(foundCategory.name, t as unknown as Record<string, string>, custom as CustomCategoryInfo[] | undefined);
         }
@@ -708,6 +718,7 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
       icon: account.icon,
       creditLimit: account.creditLimit,
       dueDay: account.dueDay,
+      bestDayOffset: account.bestDayOffset,
     });
 
     // A conta criada retorna com o householdId (que pode ter sido criado pelo backend)
@@ -763,10 +774,10 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
     }
   }, [updateAccount]);
 
-  const deleteAccountFn = useCallback(async (id: string): Promise<void> => {
+  const deleteAccountFn = useCallback(async (id: string, deleteTransactions = false): Promise<void> => {
     const accountToDelete = accounts.find(a => a.id === id);
-    await deleteAccount.mutateAsync(id);
-    
+    await deleteAccount.mutateAsync({ accountId: id, deleteTransactions });
+
     if (accountToDelete) {
       analyticsHelpers.logAccountDeleted(accountToDelete.type);
     }
@@ -853,9 +864,33 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
     const installmentAmount = transaction.amount / installments;
     const installmentId = Date.now().toString();
 
+    // Detect if the purchase is on a credit card — installments on a credit
+    // card always settle the limit immediately (paid = true) regardless of
+    // the purchase date, otherwise the "Atrasado" tag triggers for every
+    // historical installment.
+    const linkedAccount = accounts.find(a => a.id === transaction.accountId);
+    const isCreditCardInstallment =
+      !!linkedAccount && linkedAccount.type === AccountType.CREDIT;
+
+    // For credit cards, the purchase date and the first-invoice month can
+    // differ. If the user buys on or after closingDay, the purchase lands in
+    // the NEXT month's invoice — so the first installment must be pushed one
+    // month forward to avoid two installments falling in the same calendar
+    // month (the bug reported on Reddit).
+    const purchaseDate = new Date(transaction.date);
+    let firstInstallmentAnchor = purchaseDate;
+    if (
+      isCreditCardInstallment &&
+      linkedAccount.closingDay !== undefined &&
+      linkedAccount.closingDay !== null &&
+      purchaseDate.getDate() >= linkedAccount.closingDay
+    ) {
+      firstInstallmentAnchor = addMonths(purchaseDate, 1);
+    }
+
     const transactionsToCreate = [];
     for (let i = 0; i < installments; i++) {
-      const installmentDate = addMonths(transaction.date, i);
+      const installmentDate = addMonths(firstInstallmentAnchor, i);
       const catName = (toCategoryName(transaction.category, t as unknown as Record<string, string>, custom as CustomCategoryInfo[] | undefined) || CategoryName.OTHER_EXPENSES) as CategoryName;
       const accountId = transaction.accountId || accounts[0]?.id;
       if (!accountId) {
@@ -867,7 +902,9 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
         categoryName: catName,
         accountId,
         date: formatDateForAPI(installmentDate),
-        paid: transaction.paid !== undefined ? transaction.paid : false,
+        paid: isCreditCardInstallment
+          ? true
+          : (transaction.paid !== undefined ? transaction.paid : false),
         installmentId,
         installmentNumber: i + 1,
         totalInstallments: installments,

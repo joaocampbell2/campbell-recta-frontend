@@ -1,0 +1,198 @@
+---
+description: Padrões React e TypeScript para web app
+globs: ["**/*.{ts,tsx}"]
+alwaysApply: false
+---
+
+# Padrões React - Web App
+
+## Estrutura de Componentes
+
+```typescript
+// ✅ GOOD - Componente funcional tipado
+interface ComponentProps {
+  id: string;
+  title: string;
+  onAction?: () => void;
+}
+
+export default function Component({ id, title, onAction }: ComponentProps) {
+  // 1. Hooks de contexto
+  const { theme } = useTheme();
+  const { t } = useI18n();
+  
+  // 2. Hooks de estado
+  const [state, setState] = useState<string>();
+  
+  // 3. Hooks de dados (React Query)
+  const { data, isLoading } = useQuery(...);
+  
+  // 4. Memoized values
+  const computed = useMemo(() => ..., [deps]);
+  
+  // 5. Effects
+  useEffect(() => ..., [deps]);
+  
+  // 6. Handlers
+  const handleClick = useCallback(() => {
+    onAction?.();
+  }, [onAction]);
+  
+  // 7. Early returns
+  if (isLoading) return <LoadingSpinner />;
+  if (!data) return null;
+  
+  // 8. Render
+  return (
+    <div className="...">
+      {/* JSX */}
+    </div>
+  );
+}
+```
+
+## React Query Hooks
+
+```typescript
+// ✅ GOOD - Hook de query tipado
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '../utils/api';
+
+export interface Transaction {
+  id: string;
+  amount: number;
+  description: string;
+}
+
+export interface ListTransactionsParams {
+  householdId?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export function useTransactions(params: ListTransactionsParams) {
+  return useQuery({
+    queryKey: ['transactions', params],
+    queryFn: () => apiClient.get<Transaction[]>('/transactions', { params }),
+    enabled: !!params.householdId, // Só busca se tiver householdId
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+}
+
+// ✅ GOOD - Mutation com invalidação
+export function useCreateTransaction() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (data: CreateTransactionInput) =>
+      apiClient.post('/transactions', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    },
+  });
+}
+```
+
+## Formulários
+
+```typescript
+// ✅ GOOD - React Hook Form + Zod
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const schema = z.object({
+  name: z.string().min(1, 'Nome é obrigatório'),
+  amount: z.number().positive('Valor deve ser positivo'),
+  date: z.date(),
+});
+
+type FormData = z.infer<typeof schema>;
+
+export function TransactionForm() {
+  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      date: new Date(),
+    },
+  });
+  
+  const mutation = useCreateTransaction();
+  
+  const onSubmit = async (data: FormData) => {
+    await mutation.mutateAsync(data);
+  };
+  
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <Controller
+        name="name"
+        control={control}
+        render={({ field }) => (
+          <Input {...field} error={errors.name?.message} />
+        )}
+      />
+      <Button type="submit" disabled={isSubmitting}>
+        Salvar
+      </Button>
+    </form>
+  );
+}
+```
+
+## Styling com Tailwind
+
+```typescript
+// ✅ GOOD - Classes Tailwind organizadas
+<div className={cn(
+  "flex items-center gap-4 p-4 rounded-lg",
+  theme === 'dark' ? "bg-gray-800" : "bg-white",
+  isActive && "ring-2 ring-blue-500"
+)}>
+
+// ✅ GOOD - Usar cn() para condicionais
+import { cn } from '@/utils/cn';
+
+// ❌ BAD - Classes inline complexas
+<div className={`flex ${isActive ? 'bg-blue' : 'bg-gray'} ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
+```
+
+## Error Handling
+
+```typescript
+// ✅ GOOD - Tratar erros de forma consistente
+const { data, error, isLoading } = useTransactions(params);
+
+if (error) {
+  if (error instanceof NetworkError) {
+    return <NetworkErrorView />;
+  }
+  if (error.status === 404) {
+    return <NotFound />;
+  }
+  return <ErrorView message={error.message} />;
+}
+```
+
+## Performance
+
+```typescript
+// ✅ GOOD - Memoizar quando necessário
+const expensiveValue = useMemo(
+  () => computeExpensiveValue(data),
+  [data]
+);
+
+// ✅ GOOD - Callback memoizado
+const handleClick = useCallback(() => {
+  doSomething(id);
+}, [id]);
+
+// ✅ GOOD - Lazy loading de componentes pesados
+const HeavyChart = lazy(() => import('./HeavyChart'));
+
+<Suspense fallback={<LoadingSpinner />}>
+  <HeavyChart data={data} />
+</Suspense>
+```

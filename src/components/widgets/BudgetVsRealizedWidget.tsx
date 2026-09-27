@@ -8,6 +8,7 @@ import { TransactionType, getCategoryDisplayName, CustomCategoryInfo } from '../
 import { Target, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { getTransactionsByCategory, getTotalIncome, getTotalExpense } from '../../utils/calculations';
 import { getTransactionsByMonth } from '../../utils/calculations';
+import { isGeneralBudget } from '../../utils/categories';
 import { useCategories } from '../../hooks/api/useCategories';
 import { useDefaultHousehold } from '../../hooks/useDefaultHousehold';
 
@@ -51,7 +52,7 @@ export const BudgetVsRealizedWidget = ({ selectedMonth, blurNumbers = false }: B
     return monthBudgets.map((budget) => {
       let spent = 0;
 
-      if (budget.category === 'Geral') {
+      if (isGeneralBudget(budget)) {
         if (budget.type === TransactionType.EXPENSE) {
           spent = getTotalExpense(monthTransactions);
         } else {

@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 export interface Budget {
   id: string;
   householdId: string;
-  categoryName: CategoryName;
+  categoryName: CategoryName | 'GENERAL';
   monthlyLimit: number;
   month: string;
   type: CategoryType;
@@ -17,7 +17,7 @@ export interface Budget {
 export interface BudgetSummary {
   budgets: Array<{
     budgetId: string;
-    categoryName: CategoryName;
+    categoryName: CategoryName | 'GENERAL';
     categoryColor?: string;
     monthlyLimit: number;
     spending: number;
@@ -33,7 +33,7 @@ export interface ListBudgetsParams {
   householdId?: string; // Optional - backend will use personal household if not provided
   startDate?: string;
   endDate?: string;
-  categoryName?: CategoryName;
+  categoryName?: CategoryName | 'GENERAL';
 }
 
 export interface BudgetSummaryParams {
@@ -102,7 +102,7 @@ export function useCreateBudget() {
   return useMutation({
     mutationFn: async (data: {
       householdId?: string; // Optional - backend will create personal household if not provided
-      categoryName: CategoryName;
+      categoryName: CategoryName | 'GENERAL';
       monthlyLimit: number;
       month: string;
       type: CategoryType;

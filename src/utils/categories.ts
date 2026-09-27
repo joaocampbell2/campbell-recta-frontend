@@ -9,6 +9,22 @@ import {
 import type { Translations } from '../context/I18nContext';
 import type { CustomCategoryInfo } from '../lib/enums';
 
+/**
+ * Detect the "GENERAL" pseudo-category budget (total spending/income of the
+ * month, across all categories).
+ *
+ * Detection must rely on `categoryName` (the stable enum-like value), NOT on
+ * `category` (the localized display name). The display name is
+ * `t.general` (e.g. "Geral (Todas as categorias)" in pt-BR), so comparing it
+ * against the literal "Geral"/"GENERAL" silently fails and makes the general
+ * budget's spending compute as 0. Legacy budgets that only carried the display
+ * name are still matched via the fallback.
+ */
+export function isGeneralBudget(budget: { categoryName?: string; category?: string }): boolean {
+  const raw = (budget.categoryName ?? budget.category ?? '').trim();
+  return raw === 'GENERAL' || raw === 'General' || raw === 'Geral';
+}
+
 /** Item for merged list: value = enum or "CUSTOM:uuid", display = translated/user name */
 export interface MergedCategoryOption {
   value: string;

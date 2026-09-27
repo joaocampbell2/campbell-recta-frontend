@@ -6,7 +6,7 @@ import { AlertTriangle, X } from 'lucide-react';
 interface DeleteAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (deleteTransactions: boolean) => void;
   accountName: string;
 }
 
@@ -18,11 +18,13 @@ const DeleteAccountModal = ({
 }: DeleteAccountModalProps) => {
   const { t } = useI18n();
   const [typedName, setTypedName] = useState('');
+  const [deleteTransactions, setDeleteTransactions] = useState(false);
 
   // Reset form when modal opens/closes
   useEffect(() => {
     if (!isOpen) {
       setTypedName('');
+      setDeleteTransactions(false);
     }
   }, [isOpen]);
 
@@ -54,7 +56,7 @@ const DeleteAccountModal = ({
 
   const handleConfirm = () => {
     if (canConfirm) {
-      onConfirm();
+      onConfirm(deleteTransactions);
       onClose();
     }
   };
@@ -99,9 +101,23 @@ const DeleteAccountModal = ({
                 {t.deleteAccountWarning || 'Esta ação é permanente e não pode ser desfeita.'}
               </p>
               <p className="text-sm text-red-700 dark:text-red-400">
-                {t.deleteAccountTransactionsWarning || 'As transações associadas a esta conta bancária serão mantidas na sua conta do Recta e serão debitadas no cálculo de saldo da próxima conta bancária que você cadastrar. Você precisará remover esses registros manualmente caso não queira que isso afete o saldo bancário.'}
+                {deleteTransactions
+                  ? (t.deleteAccountAndTransactionsWarning || 'Todas as transações vinculadas a esta conta bancária também serão apagadas permanentemente. Esta ação não pode ser desfeita.')
+                  : (t.deleteAccountTransactionsWarning || 'As transações associadas a esta conta bancária serão mantidas na sua conta do Recta e serão debitadas no cálculo de saldo da próxima conta bancária que você cadastrar. Você precisará remover esses registros manualmente caso não queira que isso afete o saldo bancário.')}
               </p>
             </div>
+
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40">
+              <input
+                type="checkbox"
+                checked={deleteTransactions}
+                onChange={(e) => setDeleteTransactions(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-red-600 focus:ring-red-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                {t.deleteLinkedTransactions || 'Também apagar todas as transações vinculadas a esta conta'}
+              </span>
+            </label>
 
             <div>
               <label htmlFor="account-name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

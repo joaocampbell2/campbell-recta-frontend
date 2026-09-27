@@ -756,7 +756,10 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
         type: data.type,
         category: data.category || undefined,
         date: data.date,
-        paid: data.paid,
+        // Credit card purchases always settle the limit immediately — never
+        // mark them as pending, otherwise the "Atrasado" tag triggers even
+        // when the purchase date falls inside the invoice period.
+        paid: isCreditCardContext ? true : data.paid,
         accountId: data.accountId || undefined,
         ...(isSplit && data.type === TransactionType.EXPENSE && isSharedHousehold && splits.length > 0 && {
           isSplit: true,

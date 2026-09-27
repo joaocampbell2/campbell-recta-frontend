@@ -553,9 +553,9 @@ const Accounts = () => {
     setDeleteModal({ isOpen: true, account });
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = async (deleteTransactions: boolean) => {
     if (deleteModal.account?.id) {
-      await deleteAccount(deleteModal.account.id);
+      await deleteAccount(deleteModal.account.id, deleteTransactions);
       setDeleteModal({ isOpen: false, account: null });
       if (deleteModal.account.id === selectedAccountId) {
         setSelectedAccountId(null);

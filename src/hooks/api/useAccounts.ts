@@ -20,6 +20,7 @@ export interface Account {
   availableLimit?: number;
   dueDay?: number;
   closingDay?: number;
+  bestDayOffset?: number;
   linkedAccountId?: string;
   isActive: boolean;
   createdAt: string;
@@ -150,6 +151,8 @@ export function useCreateAccount() {
       icon?: string;
       creditLimit?: number;
       dueDay?: number;
+      closingDay?: number;
+      bestDayOffset?: number;
     }) => {
       const response = await apiClient.post<Account>('/accounts', data);
       return response.data!;
@@ -244,14 +247,28 @@ export function useDeleteAccount() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (accountId: string) => {
-      const response = await apiClient.delete<{ id: string; householdId: string }>(`/accounts/${accountId}`);
+    mutationFn: async (
+      variables: string | { accountId: string; deleteTransactions?: boolean }
+    ) => {
+      // Support both the legacy string signature and the new options object.
+      const accountId = typeof variables === 'string' ? variables : variables.accountId;
+      const deleteTransactions =
+        typeof variables === 'string' ? false : variables.deleteTransactions ?? false;
+
+      const query = deleteTransactions ? '?deleteTransactions=true' : '';
+      const response = await apiClient.delete<{
+        id: string;
+        householdId: string;
+        deletedTransactions: number;
+      }>(`/accounts/${accountId}${query}`);
       return response.data!;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['accounts', data.id] });
       queryClient.invalidateQueries({ queryKey: ['accounts', 'summary', data.householdId] });
+      // Linked transactions may have been deleted (or set to NULL); refresh them too.
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
     },
   });
 }

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTransactions } from '../context/TransactionsContext';
 import { startOfMonth } from 'date-fns';
 import { TransactionType } from '../lib/enums';
+import { isGeneralBudget } from '../utils/categories';
 
 export interface BudgetAlert {
   category: string;
@@ -23,7 +24,7 @@ export function useBudgetAlerts(selectedMonth: Date, categoryData: any[], totalE
       .map((budget): BudgetAlert => {
         let spent = 0;
 
-        if (budget.category === 'Geral') {
+        if (isGeneralBudget(budget)) {
           if (budget.type === TransactionType.EXPENSE) {
             spent = totalExpense;
           } else {

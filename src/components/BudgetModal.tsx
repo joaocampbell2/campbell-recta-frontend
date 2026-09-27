@@ -73,7 +73,9 @@ export const BudgetModal = ({
       t as unknown as Record<string, string>
     );
     return [
-      { value: 'Geral', label: t.general },
+      // Special pseudo-category. Stored as the literal "GENERAL" so the backend
+      // can recognize it without us having to map to OTHER_EXPENSES.
+      { value: 'GENERAL', label: t.general },
       ...merged.map((x) => ({ value: x.value, label: x.display })),
     ];
   }, [watchedType, customCategories, t]);
@@ -129,7 +131,7 @@ export const BudgetModal = ({
       (customCategories || []) as EnumCustomCategoryInfo[],
       t as unknown as Record<string, string>
     );
-    const validValues = ['Geral', ...merged.map((x) => x.value)];
+    const validValues = ['GENERAL', ...merged.map((x) => x.value)];
     if (watchedCategory && !validValues.includes(watchedCategory)) {
       setValue('category', '');
     }

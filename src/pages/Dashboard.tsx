@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTransactions } from '../context/TransactionsContext';
 import { useI18n } from '../context/I18nContext';
 import { useNavigate } from 'react-router-dom';
-// import { WhatsNewModal } from '../components/WhatsNewModal'; // Desativado temporariamente
+import { WhatsNewModal, WHATS_NEW_DISMISSED_KEY } from '../components/WhatsNewModal';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../hooks/api/useUsers';
 
@@ -44,48 +44,46 @@ const Dashboard = () => {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { isBlurred } = useDemoBlur();
-  const { currentUser: _currentUser } = useAuth();
-  const { data: _user } = useUser();
+  const { currentUser } = useAuth();
+  const { data: user } = useUser();
   const {
     preferences,
     loading: preferencesLoading,
   } = useDashboardPreferences();
-  const [_showWhatsNewModal, _setShowWhatsNewModal] = useState(false);
+  const [showWhatsNewModal, setShowWhatsNewModal] = useState(false);
   const { householdId } = useDefaultHousehold();
   const { shouldShow: shouldShowRecap, markAsSeen: markRecapAsSeen } = useMonthlyRecapCheck();
   const [showRecapModal, setShowRecapModal] = useState(false);
-  
-  // Verificar se deve mostrar o modal de novidades
-  // DESATIVADO TEMPORARIAMENTE
-  // useEffect(() => {
-  //   const checkShouldShowWhatsNewModal = () => {
-  //     if (!currentUser) {
-  //       setShowWhatsNewModal(false);
-  //       return;
-  //     }
 
-  //     // Verificar se já foi dispensado
-  //     const dismissed = localStorage.getItem('whatsNewModalDismissed');
-  //     if (dismissed === 'true') {
-  //       setShowWhatsNewModal(false);
-  //       return;
-  //     }
+  // Verificar se deve mostrar o modal de novidades (uma vez por release)
+  useEffect(() => {
+    const checkShouldShowWhatsNewModal = () => {
+      if (!currentUser) {
+        setShowWhatsNewModal(false);
+        return;
+      }
 
-  //     // Verificar se completou onboarding
-  //     if (user?.onboardingCompleted === true) {
-  //       // Pequeno delay para não aparecer imediatamente
-  //       setTimeout(() => {
-  //         setShowWhatsNewModal(true);
-  //       }, 1000);
-  //     }
-  //   };
+      // Verificar se já foi dispensado nesta versão
+      const dismissed = localStorage.getItem(WHATS_NEW_DISMISSED_KEY);
+      if (dismissed === 'true') {
+        setShowWhatsNewModal(false);
+        return;
+      }
 
-  //   const timer = setTimeout(() => {
-  //     checkShouldShowWhatsNewModal();
-  //   }, 500);
+      // Só mostrar após o onboarding
+      if (user?.onboardingCompleted === true) {
+        setTimeout(() => {
+          setShowWhatsNewModal(true);
+        }, 1000);
+      }
+    };
 
-  //   return () => clearTimeout(timer);
-  // }, [currentUser, user]);
+    const timer = setTimeout(() => {
+      checkShouldShowWhatsNewModal();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [currentUser, user]);
 
   // Verificar se deve mostrar o Monthly Recap
   useEffect(() => {
@@ -388,11 +386,10 @@ const Dashboard = () => {
         onClose={() => setIsConfigOpen(false)}
       />
 
-      {/* WhatsNewModal desativado temporariamente */}
-      {/* <WhatsNewModal 
-        isOpen={showWhatsNewModal} 
+      <WhatsNewModal
+        isOpen={showWhatsNewModal}
         onClose={() => setShowWhatsNewModal(false)}
-      /> */}
+      />
 
       {householdId && (
         <MonthlyRecapModal
