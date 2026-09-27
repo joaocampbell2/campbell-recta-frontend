@@ -31,6 +31,7 @@ import {
   Tag,
   Pencil,
   Plus,
+  Key,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import packageJson from "../../package.json";
@@ -950,7 +951,7 @@ const SettingsPage = () => {
       </div>
 
       {/* Informações do App */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg p-4 sm:p-6">
+      <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
         <h2 className="text-lg sm:text-xl font-light tracking-tight text-gray-900 dark:text-white mb-4 flex items-center">
           <Info className="h-5 w-5 mr-2" />
           {t.appInfo}
@@ -965,6 +966,36 @@ const SettingsPage = () => {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Exibir Token de Acesso */}
+      <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+        <h2 className="text-lg sm:text-xl font-light tracking-tight text-gray-900 dark:text-white mb-4 flex items-center">
+          <Key className="h-5 w-5 mr-2" />
+          Token de Acesso
+        </h2>
+        <p className="text-sm font-light text-gray-500 dark:text-gray-400 mb-4">
+          Clique no botão abaixo para exibir o seu token de acesso atual no console do navegador.
+        </p>
+        <button
+          onClick={async () => {
+            if (!currentUser) {
+              showError("Usuário não está autenticado");
+              return;
+            }
+            try {
+              const token = await currentUser.getIdToken(true);
+              console.log("Access Token:", token);
+              success("Token de acesso exibido no console!");
+            } catch (err: unknown) {
+              showError("Erro ao obter o token de acesso");
+            }
+          }}
+          className="inline-flex items-center px-4 py-2.5 text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 border border-primary-600 dark:border-primary-500 rounded-md hover:opacity-80 transition-opacity"
+        >
+          <Key className="h-4 w-4 mr-2" />
+          Mostrar Token no Console
+        </button>
       </div>
 
       {/* Modal de Resetar Conta */}
