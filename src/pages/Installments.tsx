@@ -7,14 +7,16 @@ import { formatCurrency, formatDate } from '../utils/format';
 import { PageHeader } from '../components/PageHeader';
 import { 
   CreditCard, Search, Calendar, ChevronDown, ChevronUp, CheckCircle2, Clock, 
-  TrendingDown, DollarSign, AlertCircle, ShoppingBag, Eye, EyeOff, Receipt
+  TrendingDown, ShoppingBag, Receipt
 } from 'lucide-react';
 
 const Installments = () => {
   const { householdId } = useDefaultHousehold();
   const { baseCurrency } = useCurrency();
   const { t } = useI18n();
-  const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('active');
+  const [accountFilter, setAccountFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Fetch installment transactions
@@ -23,26 +25,55 @@ const Installments = () => {
     limit: 100, // Fetch a large enough batch to show in memory
   });
 
-  const installments = responseData?.data || [];
+  const installments = useMemo(() => responseData?.data || [], [responseData?.data]);
+
+  // Extrair contas únicas das parcelas para o filtro
+  const uniqueAccounts = useMemo(() => {
+    const accounts = new Map();
+    installments.forEach(item => {
+      if (item.account) {
+        accounts.set(item.account.id, item.account.name);
+      }
+    });
+    return Array.from(accounts.entries());
+  }, [installments]);
 
   // Toggle expanded details of a purchase
   const toggleExpand = (id: string) => {
     setExpandedId(prev => (prev === id ? null : id));
   };
 
-  // Filter installment purchases based on search term
+  // Filter installment purchases based on search term, status AND account
   const filteredInstallments = useMemo(() => {
-    if (!searchTerm.trim()) return installments;
-    const lowerSearch = searchTerm.toLowerCase();
-    return installments.filter(item => 
-      item.description.toLowerCase().includes(lowerSearch) ||
-      (item.account?.name && item.account.name.toLowerCase().includes(lowerSearch))
-    );
-  }, [installments, searchTerm]);
+    let filtered = installments;
+
+    // Apply Search
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.description.toLowerCase().includes(lowerSearch) ||
+        (item.account?.name && item.account.name.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    // Apply Status Filter
+    if (statusFilter === 'active') {
+      filtered = filtered.filter(item => item.paidInstallmentsCount < item.totalInstallments);
+    } else if (statusFilter === 'completed') {
+      filtered = filtered.filter(item => item.paidInstallmentsCount === item.totalInstallments);
+    }
+
+    // Apply Account Filter
+    if (accountFilter !== 'all') {
+      filtered = filtered.filter(item => item.account?.id === accountFilter);
+    }
+
+    return filtered;
+  }, [installments, searchTerm, statusFilter, accountFilter]);
 
   // Compute overall stats metrics
   const stats = useMemo(() => {
-    let totalPurchasesCount = installments.length;
+    const totalPurchasesCount = installments.length;
     let totalRemainingDebt = 0;
     let monthlyCommitment = 0;
 
@@ -109,17 +140,64 @@ const Installments = () => {
         </div>
       </div>
 
-      {/* Filter and Search */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm flex items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Pesquisar por descrição ou conta..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border-0 bg-transparent text-gray-900 dark:text-white focus:outline-none focus:ring-0 placeholder-gray-400 text-sm"
-          />
+            {/* Filter and Search */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Pesquisar por descrição ou conta..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border-0 bg-transparent text-gray-900 dark:text-white focus:outline-none focus:ring-0 placeholder-gray-400 text-sm"
+            />
+          </div>
+          
+          {/* Status Filter */}
+          <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
+            {(['active', 'completed', 'all'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  statusFilter === s 
+                    ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-white shadow-sm' 
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                {s === 'active' ? 'Ativo' : s === 'completed' ? 'Concluído' : 'Todos'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Account Filter */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="text-xs font-semibold text-gray-400 whitespace-nowrap">Cartões:</span>
+          <button
+            onClick={() => setAccountFilter('all')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+              accountFilter === 'all' 
+                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200' 
+                : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-transparent'
+            }`}
+          >
+            Todos
+          </button>
+          {uniqueAccounts.map(([id, name]) => (
+            <button
+              key={id}
+              onClick={() => setAccountFilter(id)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${
+                accountFilter === id 
+                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200' 
+                  : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-transparent'
+              }`}
+            >
+              {name}
+            </button>
+          ))}
         </div>
       </div>
 

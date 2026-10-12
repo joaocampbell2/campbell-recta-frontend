@@ -391,8 +391,8 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const defaultDate = new Date();
-      // Se a data padrão for hoje ou passado, assume como pago (a menos que defaultPaid seja fornecido)
-      const isPaidDefault = defaultPaid !== undefined ? defaultPaid : defaultDate >= today;
+            // Se a data padrão for hoje ou passado, assume como pago (a menos que defaultPaid seja fornecido)
+      const isPaidDefault = defaultPaid !== undefined ? defaultPaid : true;
 
       setIsRecurring(false);
       setRecurringFrequency('monthly');
