@@ -201,54 +201,19 @@ const SavingAccounts = () => {
   const { data: transactionsData, isLoading: transactionsLoading } = useTransactionsQuery(transactionsQuery);
   const loadMoreMutation = useLoadMoreTransactions();
 
-  // Convert backend transactions to frontend format
+    // Convert backend transactions to frontend format
   const transactions = useMemo(() => {
     if (!transactionsData?.data) return [];
     return transactionsData.data
       .map((t: any) => {
-        // Check if it's a transfer or allocation
-        if (t.type === 'TRANSFER' || t.type === 'ALLOCATION') {
-          let parsedDate: Date;
-          try {
-            parsedDate = parseDateFromAPI(t.date);
-            if (isNaN(parsedDate.getTime())) {
-              return null;
-            }
-          } catch {
-            return null;
-          }
-          
-          let categoryName: CategoryName | string;
-          if (t.categoryName) {
-            categoryName = t.categoryName; // Can be CategoryName enum or "CUSTOM:uuid"
-          } else {
-            categoryName = t.type === 'TRANSFER' ? CategoryName.TRANSFER : CategoryName.ALLOCATION;
-          }
-          
-          return {
-            id: t.id,
-            description: t.description,
-            amount: typeof t.amount === 'string' ? parseFloat(t.amount) : Number(t.amount),
-            type: t.type === 'TRANSFER' ? TransactionType.TRANSFER : TransactionType.ALLOCATION,
-            category: getCategoryDisplayName(categoryName, t as Record<string, string>, customCategories),
-            date: parsedDate,
-            paid: t.paid,
-            accountId: t.accountId,
-            fromAccountId: t.fromAccountId,
-            toAccountId: t.toAccountId,
-            relatedEntityId: t.relatedEntityId,
-            recurringTransactionId: t.recurringTransactionId,
-            attachmentUrl: t.attachmentUrl,
-            installmentId: t.installmentId,
-            installmentNumber: t.installmentNumber,
-            totalInstallments: t.totalInstallments,
-            notes: t.notes,
-          };
-        }
-        
         // Use type from backend first, fallback to categoryName inference
         let transactionType: TransactionType;
-        if (t.type === 'INCOME' || t.type === 'EXPENSE' || t.type === 'TRANSFER' || t.type === 'ALLOCATION') {
+        if (
+          t.type === 'INCOME' || 
+          t.type === 'EXPENSE' || 
+          t.type === 'TRANSFER' || 
+          t.type === 'ALLOCATION'
+        ) {
           transactionType = t.type as TransactionType;
         } else {
           // Fallback: infer from categoryName if type is not available

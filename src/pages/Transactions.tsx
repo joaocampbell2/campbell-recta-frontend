@@ -62,12 +62,15 @@ const Transactions = () => {
   // Inicializar filtro de tipo a partir dos query params
   const getInitialTypeFilter = () => {
     const typeParam = searchParams.get('type');
-    // Aceitar tanto valores do enum quanto valores em português (para compatibilidade)
+        // Aceitar tanto valores do enum quanto valores em português (para compatibilidade)
     if (typeParam === TransactionType.INCOME || typeParam === 'receita' || typeParam?.toLowerCase() === 'income') {
       return TransactionType.INCOME;
     }
     if (typeParam === TransactionType.EXPENSE || typeParam === 'despesa' || typeParam?.toLowerCase() === 'expense') {
       return TransactionType.EXPENSE;
+    }
+    if (typeParam === TransactionType.TRANSFER || typeParam === 'transferencia' || typeParam?.toLowerCase() === 'transfer') {
+      return TransactionType.TRANSFER;
     }
     return 'todos';
   };
@@ -270,6 +273,8 @@ const Transactions = () => {
       setTypeFilter(TransactionType.INCOME);
     } else if (typeParam === TransactionType.EXPENSE || typeParam === 'despesa' || typeParam?.toLowerCase() === 'expense') {
       setTypeFilter(TransactionType.EXPENSE);
+    } else if (typeParam === TransactionType.TRANSFER || typeParam === 'transferencia' || typeParam?.toLowerCase() === 'transfer') {
+      setTypeFilter(TransactionType.TRANSFER);
     } else if (!typeParam && searchParams.has('type')) {
       // Se há query param 'type' mas é vazio, reseta para 'todos'
       setTypeFilter('todos');
@@ -299,10 +304,10 @@ const Transactions = () => {
     }
   }, [searchParams]);
   
-  // Atualizar query params quando o filtro mudar manualmente
+    // Atualizar query params quando o filtro mudar manualmente
   const handleTypeFilterChange = (value: string) => {
     setTypeFilter(value);
-    if (value === TransactionType.INCOME || value === TransactionType.EXPENSE) {
+    if (value === TransactionType.INCOME || value === TransactionType.EXPENSE || value === TransactionType.TRANSFER) {
       setSearchParams({ type: value }, { replace: true });
     } else {
       setSearchParams({}, { replace: true });
@@ -428,7 +433,6 @@ const Transactions = () => {
     });
   }, [transactions, searchInput, searchTerm, typeFilter, paidFilter, baseCurrency, t]);
 
-  // Função para obter chave de data (YYYY-MM-DD)
   const getDateKey = (date: Date): string => {
     try {
       const d = date instanceof Date ? date : (typeof date === 'string' ? parseDateFromAPI(date) : new Date(date));
