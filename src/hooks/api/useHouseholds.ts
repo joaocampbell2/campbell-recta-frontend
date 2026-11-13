@@ -5,6 +5,7 @@ export interface Household {
   id: string;
   name: string;
   role: 'OWNER' | 'EDITOR' | 'VIEWER';
+  isSandbox?: boolean;
   joinedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -60,6 +61,7 @@ export function useHouseholds() {
           role: ('role' in h && (h.role === 'OWNER' || h.role === 'EDITOR' || h.role === 'VIEWER')) 
             ? h.role as 'OWNER' | 'EDITOR' | 'VIEWER'
             : 'VIEWER',
+          isSandbox: 'isSandbox' in h ? Boolean(h.isSandbox) : undefined,
           createdAt: 'createdAt' in h && h.createdAt 
             ? (typeof h.createdAt === 'string' ? h.createdAt : new Date(h.createdAt).toISOString())
             : new Date().toISOString(),

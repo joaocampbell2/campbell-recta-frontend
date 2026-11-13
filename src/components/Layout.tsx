@@ -20,6 +20,8 @@ import {
   Piano,
   BadgeDollarSign,
   Receipt,
+  FlaskConical,
+  Loader2,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import MobileBanner from "./MobileBanner";
@@ -28,6 +30,7 @@ import { VerificationModal } from "./VerificationModal";
 import { FeedbackModal } from "./FeedbackModal";
 import { useUser, useUpdateUserPreferences } from "../hooks/api/useUsers";
 import { useCommandMenu } from "../context/CommandMenuContext";
+import { useTestMode } from "../context/TestModeContext";
 import { HouseholdSelector } from "./HouseholdSelector";
 import { InvitesNotification } from "./InvitesNotification";
 import { InvitesModal } from "./InvitesModal";
@@ -42,6 +45,7 @@ interface NavItem {
 const Layout = () => {
   const { logout, currentUser } = useAuth();
   const { t } = useI18n();
+  const { isTestMode, isStopping, stopTestMode } = useTestMode();
   const { setDisabled: setCommandMenuDisabled, registerHandler, unregisterHandler } = useCommandMenu();
   const location = useLocation();
   const navigate = useNavigate();
@@ -324,6 +328,30 @@ const Layout = () => {
 
       {/* Main Content */}
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'xl:ml-20' : 'xl:ml-64'}`}>
+        {/* Test Mode Top Banner */}
+        {isTestMode && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="bg-amber-500 dark:bg-amber-600 text-white px-4 py-2 flex items-center justify-between gap-3 flex-shrink-0 shadow-sm z-30"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <FlaskConical className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+              <span className="text-xs sm:text-sm font-medium truncate">
+                Modo Teste ativo — nada será salvo permanentemente
+              </span>
+            </div>
+            <button
+              onClick={stopTestMode}
+              disabled={isStopping}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs sm:text-sm font-medium bg-white text-amber-700 hover:bg-amber-50 disabled:opacity-60 transition-colors flex-shrink-0"
+            >
+              {isStopping && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+              {isStopping ? "Restaurando..." : "Encerrar teste"}
+            </button>
+          </div>
+        )}
+
         {/* Top Navbar - Always visible */}
         <header className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
           <div className="flex items-center justify-between h-16 px-4 xl:px-6">

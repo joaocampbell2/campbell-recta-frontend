@@ -3,6 +3,7 @@ import { useI18n, Locale } from "../context/I18nContext";
 import { useTheme } from "../context/ThemeContext";
 import { useToastContext } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
+import { useTestMode } from "../context/TestModeContext";
 import { useReferral } from "../hooks/useReferral";
 import { usePWAInstall } from "../hooks/usePWAInstall";
 import {
@@ -32,6 +33,8 @@ import {
   Pencil,
   Plus,
   Key,
+  FlaskConical,
+  Loader2,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import packageJson from "../../package.json";
@@ -73,6 +76,7 @@ const SettingsPage = () => {
   const { theme, toggleTheme } = useTheme();
   const { success, error: showError } = useToastContext();
   const { currentUser } = useAuth();
+  const { isTestMode, isStarting, isStopping, startTestMode, stopTestMode } = useTestMode();
   const { referralCount, getInviteLink } = useReferral();
   const { install, isInstalled, canInstall } = usePWAInstall();
   const [linkCopied, setLinkCopied] = useState(false);
@@ -996,6 +1000,46 @@ const SettingsPage = () => {
           <Key className="h-4 w-4 mr-2" />
           Mostrar Token no Console
         </button>
+      </div>
+
+      {/* Modo Teste (Sandbox Isolado) */}
+      <div className="bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+        <h2 className="text-lg sm:text-xl font-light tracking-tight text-gray-900 dark:text-white mb-4 flex items-center">
+          <FlaskConical className="h-5 w-5 mr-2 text-amber-500" />
+          Modo Teste (Sandbox)
+        </h2>
+        <p className="text-sm font-light text-gray-500 dark:text-gray-400 mb-4">
+          {isTestMode
+            ? "Você está usando um clone temporário isolado do seu ambiente financeiro. Nenhuma alteração feita aqui afeta seus dados reais."
+            : "Cria um clone temporário isolado do seu ambiente atual para testar alterações com segurança. Ao encerrar, tudo é restaurado."}
+        </p>
+        {isTestMode ? (
+          <button
+            onClick={stopTestMode}
+            disabled={isStopping}
+            className="inline-flex items-center px-4 py-2.5 text-sm font-light tracking-tight text-white bg-amber-600 dark:bg-amber-600 border border-amber-600 rounded-md hover:opacity-85 disabled:opacity-60 transition-opacity"
+          >
+            {isStopping ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FlaskConical className="h-4 w-4 mr-2" />
+            )}
+            {isStopping ? "Restaurando..." : "Sair e restaurar"}
+          </button>
+        ) : (
+          <button
+            onClick={startTestMode}
+            disabled={isStarting}
+            className="inline-flex items-center px-4 py-2.5 text-sm font-light tracking-tight text-white bg-amber-500 dark:bg-amber-500 border border-amber-500 rounded-md hover:opacity-85 disabled:opacity-60 transition-opacity"
+          >
+            {isStarting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FlaskConical className="h-4 w-4 mr-2" />
+            )}
+            {isStarting ? "Clonando ambiente..." : "Iniciar modo teste"}
+          </button>
+        )}
       </div>
 
       {/* Modal de Resetar Conta */}

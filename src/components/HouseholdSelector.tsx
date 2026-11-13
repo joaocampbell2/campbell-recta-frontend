@@ -15,7 +15,7 @@ interface HouseholdSelectorProps {
 export function HouseholdSelector({ collapsed = false }: HouseholdSelectorProps) {
   const { t } = useI18n();
   const { data: households, isLoading } = useHouseholds();
-  const { householdId: currentHouseholdId, household: currentHousehold } = useDefaultHousehold();
+  const { householdId: currentHouseholdId, household: currentHousehold, isTestMode } = useDefaultHousehold();
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
@@ -30,9 +30,10 @@ export function HouseholdSelector({ collapsed = false }: HouseholdSelectorProps)
   const sortedHouseholds = households && Array.isArray(households) 
     ? [...households]
         .filter((h) => {
-          // Filter out invalid households: empty objects, null, undefined, or missing id
+          // Filter out invalid households and sandbox households
           if (!h || typeof h !== 'object') return false;
           if (Object.keys(h).length === 0) return false; // Empty object {}
+          if (h.isSandbox) return false;
           return h.id && typeof h.id === 'string' && h.id.length > 0;
         })
         .sort((a, b) => {
@@ -46,7 +47,7 @@ export function HouseholdSelector({ collapsed = false }: HouseholdSelectorProps)
   const sharedHouseholds = sortedHouseholds.slice(1).filter((h) => h && h.id && typeof h.id === 'string'); // Extra safety filter
 
   const handleHouseholdChange = async (householdId: string) => {
-    if (!householdId) {
+    if (isTestMode || !householdId) {
       return;
     }
 
@@ -109,9 +110,18 @@ export function HouseholdSelector({ collapsed = false }: HouseholdSelectorProps)
       <>
         <div className="relative">
           <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="w-full flex items-center justify-center p-2 text-sm font-light text-gray-900 dark:text-white bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:opacity-70 transition-opacity"
-            title={currentHousehold?.name || households?.find(h => h?.id === currentHouseholdId)?.name || t.myFinances}
+            onClick={() => !isTestMode && setIsDropdownOpen(!isDropdownOpen)}
+            disabled={isTestMode}
+            className={`w-full flex items-center justify-center p-2 text-sm font-light rounded-lg transition-opacity ${
+              isTestMode
+                ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 cursor-not-allowed'
+                : 'text-gray-900 dark:text-white bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:opacity-70'
+            }`}
+            title={
+              isTestMode
+                ? 'Modo Teste ativo — encerre o teste para trocar de ambiente'
+                : currentHousehold?.name || households?.find(h => h?.id === currentHouseholdId)?.name || t.myFinances
+            }
           >
             <Users className="h-5 w-5" />
           </button>
@@ -260,8 +270,14 @@ export function HouseholdSelector({ collapsed = false }: HouseholdSelectorProps)
     <>
       <div className="relative">
         <button
-          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className="w-full flex items-center justify-between px-4 py-2 text-sm font-light text-gray-900 dark:text-white bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:opacity-70 transition-opacity"
+          onClick={() => !isTestMode && setIsDropdownOpen(!isDropdownOpen)}
+          disabled={isTestMode}
+          title={isTestMode ? 'Modo Teste ativo — encerre o teste para trocar de ambiente' : undefined}
+          className={`w-full flex items-center justify-between px-4 py-2 text-sm font-light rounded-lg transition-opacity ${
+            isTestMode
+              ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 cursor-not-allowed'
+              : 'text-gray-900 dark:text-white bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:opacity-70'
+          }`}
         >
           <div className="flex items-center space-x-2 min-w-0 flex-1">
             <Users className="h-4 w-4 flex-shrink-0" />

@@ -313,6 +313,7 @@ const STORAGE_KEYS = {
   DEBTS: 'recta_split_debts_v1',
   IMPORTED_TX_IDS: 'recta_split_imported_tx_ids_v1',
   HIDE_LEGACY_TOOL: 'recta_split_hide_legacy_tool_v1',
+  DEFAULT_REIMBURSEMENT_ACCOUNT: 'recta_split_default_reimbursement_account_v1',
 };
 
 // ============================================================================
@@ -326,6 +327,7 @@ const Loans: React.FC = () => {
   const {
     accounts: contextAccounts,
     transactions,
+    customCategories,
     addTransaction,
     deleteTransaction,
   } = useTransactions();
@@ -446,6 +448,53 @@ const Loans: React.FC = () => {
   const [isAddDebtOpen, setIsAddDebtOpen] = useState(false);
   const [isImportLegacyOpen, setIsImportLegacyOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [isReimbursementMenuOpen, setIsReimbursementMenuOpen] = useState(false);
+  const [defaultReimbursementAccountId, setDefaultReimbursementAccountId] = useState<string>(() => {
+    try {
+      const key = `${STORAGE_KEYS.DEFAULT_REIMBURSEMENT_ACCOUNT}_${householdId || 'default'}`;
+      return localStorage.getItem(key) || '';
+    } catch {
+      return '';
+    }
+  });
+
+  // Sync default reimbursement account when household or accounts change
+  useEffect(() => {
+    const key = `${STORAGE_KEYS.DEFAULT_REIMBURSEMENT_ACCOUNT}_${householdId || 'default'}`;
+    let saved = '';
+    try {
+      saved = localStorage.getItem(key) || '';
+    } catch {
+      saved = '';
+    }
+    const isValidSaved = saved && userAccounts.some((acc) => acc.id === saved);
+    if (isValidSaved) {
+      setDefaultReimbursementAccountId(saved);
+    } else if (userAccounts[0]?.id) {
+      setDefaultReimbursementAccountId(userAccounts[0].id);
+    } else {
+      setDefaultReimbursementAccountId('');
+    }
+  }, [householdId, userAccounts]);
+
+  const handleSelectDefaultReimbursementAccount = (accountId: string) => {
+    setDefaultReimbursementAccountId(accountId);
+    setIsReimbursementMenuOpen(false);
+    try {
+      const key = `${STORAGE_KEYS.DEFAULT_REIMBURSEMENT_ACCOUNT}_${householdId || 'default'}`;
+      localStorage.setItem(key, accountId);
+    } catch {
+      // Ignore storage errors
+    }
+  };
+
+  const defaultReimbursementAccountName = useMemo(() => {
+    return (
+      accountMap.get(defaultReimbursementAccountId) ||
+      userAccounts[0]?.name ||
+      'Conta padrão'
+    );
+  }, [accountMap, defaultReimbursementAccountId, userAccounts]);
   const [importedTxIds, setImportedTxIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.IMPORTED_TX_IDS);
@@ -828,6 +877,37 @@ const Loans: React.FC = () => {
     });
   };
 
+  const createReimbursementTransaction = (debt: SplitDebt, amount: number) => {
+    if (debt.direction !== 'THEY_OWE_ME' || amount <= 0) return;
+
+    const friend = friendMap.get(debt.friendId);
+    const reimbursementCat = customCategories?.find((c) =>
+      c.name.toLowerCase().includes('reembolso')
+    );
+    const categoryValue = reimbursementCat
+      ? `CUSTOM:${reimbursementCat.id}`
+      : getCategoryDisplayName(
+          CategoryName.OTHER_INCOME,
+          t as unknown as Record<string, string>
+        );
+
+    const chosenAccId = defaultReimbursementAccountId || debt.accountId;
+    const validAccountId =
+      chosenAccId && !chosenAccId.startsWith('acc-') ? chosenAccId : undefined;
+
+    addTransaction({
+      description: `Reembolso: ${debt.description}${friend ? ` (${friend.name})` : ''}`,
+      amount: Number(amount.toFixed(2)),
+      type: TransactionType.INCOME,
+      category: categoryValue,
+      date: new Date(),
+      accountId: validAccountId,
+      paid: true,
+    }).catch(() => {
+      // Mantém funcionamento local caso backend não esteja ativo
+    });
+  };
+
   const toggleInstallmentPaid = (debtId: string, installmentId: string, paidNote?: string) => {
     const targetDebt = debts.find((d) => d.id === debtId);
     const targetInst = targetDebt?.installments.find((i) => i.id === installmentId);
@@ -871,6 +951,15 @@ const Loans: React.FC = () => {
             paidNote: note,
           })
           .catch(() => {});
+
+        if (nextPaid && targetDebt.direction === 'THEY_OWE_ME') {
+          const otherUnpaidCount = targetDebt.installments.filter(
+            (i) => i.id !== installmentId && !i.paid
+          ).length;
+          if (otherUnpaidCount === 0) {
+            createReimbursementTransaction(targetDebt, targetDebt.debtTotalAmount);
+          }
+        }
       },
     });
   };
@@ -893,6 +982,10 @@ const Loans: React.FC = () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     if (options.mode === 'full') {
+      const unpaidSum = targetDebt.installments
+        .filter((i) => !i.paid)
+        .reduce((s, i) => s + i.amount, 0);
+
       setDebts((prev) =>
         prev.map((debt) => {
           if (debt.id !== debtId) return debt;
@@ -911,6 +1004,7 @@ const Loans: React.FC = () => {
           };
         })
       );
+      createReimbursementTransaction(targetDebt, unpaidSum);
       setSelectedDebtDetailId(null);
       return;
     }
@@ -950,6 +1044,10 @@ const Loans: React.FC = () => {
           };
         })
       );
+
+      if (paidAmount > 0) {
+        createReimbursementTransaction(targetDebt, paidAmount);
+      }
 
       if (remainder > 0) {
         const legacyMap: Record<string, CategoryName> = {
@@ -1046,6 +1144,15 @@ const Loans: React.FC = () => {
       confirmText: 'Sim, quitar mês',
       variant: 'info',
       onConfirm: () => {
+        const newlySettledDebts = debts.filter((debt) => {
+          if (debt.friendId !== friendId || debt.direction !== 'THEY_OWE_ME') return false;
+          const wasOpen = debt.installments.some((i) => !i.paid);
+          if (!wasOpen) return false;
+          return debt.installments.every(
+            (inst) => inst.paid || isSameMonth(parseISO(inst.dueDate), selectedMonth)
+          );
+        });
+
         setDebts((prev) =>
           prev.map((debt) => {
             if (debt.friendId !== friendId) return debt;
@@ -1071,6 +1178,10 @@ const Loans: React.FC = () => {
             month: format(selectedMonth, 'yyyy-MM'),
           })
           .catch(() => {});
+
+        newlySettledDebts.forEach((debt) => {
+          createReimbursementTransaction(debt, debt.debtTotalAmount);
+        });
       },
     });
   };
@@ -1654,6 +1765,52 @@ const Loans: React.FC = () => {
         >
           Nova Despesa
         </PageButton>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsReimbursementMenuOpen((prev) => !prev)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-xs font-light text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            title="Conta padrão para receber reembolsos"
+          >
+            <Wallet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+            <span className="hidden sm:inline text-gray-400 dark:text-gray-500">Reembolso:</span>
+            <span className="font-medium truncate max-w-[110px]">
+              {defaultReimbursementAccountName}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+          </button>
+          {isReimbursementMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-30"
+                onClick={() => setIsReimbursementMenuOpen(false)}
+              />
+              <div className="absolute right-0 mt-1.5 w-64 z-40 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-lg py-1.5">
+                <div className="px-3.5 py-1.5 text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800">
+                  Conta padrão de reembolsos
+                </div>
+                {userAccounts.map((acc) => {
+                  const isSelected = acc.id === defaultReimbursementAccountId;
+                  return (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => handleSelectDefaultReimbursementAccount(acc.id)}
+                      className={`w-full px-3.5 py-2 text-left text-xs flex items-center justify-between transition-colors ${
+                        isSelected
+                          ? 'bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 font-medium'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <span className="truncate">{acc.name}</span>
+                      {isSelected && <span className="text-xs ml-2">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
         {!isLegacyToolHidden && (
           <div className="relative">
             <button
@@ -2826,6 +2983,7 @@ const Loans: React.FC = () => {
       <SplitSettleDebtModal
         debt={settleModalDebt}
         accountName={settleModalDebt ? getDebtAccountName(settleModalDebt) : ''}
+        reimbursementAccountName={defaultReimbursementAccountName}
         baseCurrency={baseCurrency}
         onClose={() => setSettleModalDebtId(null)}
         onConfirm={handleConfirmSettleDebt}

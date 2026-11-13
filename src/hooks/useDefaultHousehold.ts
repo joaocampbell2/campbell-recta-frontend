@@ -7,6 +7,11 @@ import {
   loadHouseholdFromLocalStorage,
   clearHouseholdFromLocalStorage 
 } from '../utils/householdStorage';
+import {
+  loadTestModeFromLocalStorage,
+  clearTestModeFromLocalStorage,
+  TestModeState,
+} from '../utils/testModeStorage';
 
 /**
  * Hook to get the default household for the current user
@@ -30,6 +35,9 @@ export function useDefaultHousehold() {
   // IMPORTANT: Initialize synchronously on mount to ensure we have the value immediately
   const [cachedHousehold, setCachedHousehold] = useState<ReturnType<typeof loadHouseholdFromLocalStorage>>(() => 
     loadHouseholdFromLocalStorage()
+  );
+  const [testModeState, setTestModeState] = useState<TestModeState | null>(() =>
+    loadTestModeFromLocalStorage()
   );
 
   // Listen for localStorage changes (via storage event or custom event)
@@ -57,10 +65,17 @@ export function useDefaultHousehold() {
       });
     };
 
+    const updateTestMode = () => {
+      setTestModeState(loadTestModeFromLocalStorage());
+    };
+
     // Listen for storage events (fired when localStorage changes in other tabs/windows)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'household_id' || e.key === 'household_id_timestamp') {
         updateCachedHousehold();
+      }
+      if (e.key === 'recta_test_mode') {
+        updateTestMode();
       }
     };
 
@@ -73,13 +88,21 @@ export function useDefaultHousehold() {
       });
     };
 
+    const handleTestModeChange = (_e: Event) => {
+      requestAnimationFrame(() => {
+        updateTestMode();
+      });
+    };
+
     window.addEventListener('storage', handleStorageChange);
     // Custom event for same-tab updates (critical for immediate updates without reload)
     window.addEventListener('householdStorageChange', handleCustomStorageChange);
+    window.addEventListener('testModeChange', handleTestModeChange);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('householdStorageChange', handleCustomStorageChange);
+      window.removeEventListener('testModeChange', handleTestModeChange);
     };
   }, []); // Empty deps - only set up listeners once
 
@@ -100,12 +123,14 @@ export function useDefaultHousehold() {
     }
     
     // Sort households by createdAt to find the personal one (oldest)
-    // This ensures we always use the personal household as fallback, not a shared one
-    const sorted = [...households].sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.joinedAt || 0).getTime();
-      const dateB = new Date(b.createdAt || b.joinedAt || 0).getTime();
-      return dateA - dateB; // Oldest first
-    });
+    // This ensures we always use the personal household as fallback, not a shared or sandbox one
+    const sorted = [...households]
+      .filter((h) => !h.isSandbox)
+      .sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.joinedAt || 0).getTime();
+        const dateB = new Date(b.createdAt || b.joinedAt || 0).getTime();
+        return dateA - dateB; // Oldest first
+      });
     
     return sorted[0] || null;
   }, [cachedHousehold?.id, households]);
@@ -118,6 +143,7 @@ export function useDefaultHousehold() {
   useEffect(() => {
     if (!isAuthenticated) {
       clearHouseholdFromLocalStorage();
+      clearTestModeFromLocalStorage();
       return;
     }
 
@@ -176,9 +202,16 @@ export function useDefaultHousehold() {
     }
   }, [isAuthenticated, isLoading, cachedHousehold?.id, cachedHousehold?.name, cachedHousehold?.role, cachedHouseholdInAPI, fallbackHousehold, households, authUser]);
 
-  // Use household ID - ALWAYS prioritize cached if it exists (user's selection)
+  const isTestMode = Boolean(
+    isAuthenticated && testModeState?.active && testModeState.sandboxHouseholdId
+  );
+
+  // Use household ID - prioritize active sandbox if in test mode, then cached if it exists
   // This ensures user's selection is NEVER overwritten, even if API hasn't loaded yet
   const householdId = useMemo(() => {
+    if (isTestMode && testModeState?.sandboxHouseholdId) {
+      return testModeState.sandboxHouseholdId;
+    }
     // CRITICAL: Always use cached household ID if it exists - this is the user's explicit selection
     // Do NOT use fallback even if API has loaded - respect user's choice
     if (isAuthenticated && cachedHousehold?.id) {
@@ -186,11 +219,19 @@ export function useDefaultHousehold() {
     }
     // Only use fallback if there's NO cached household (first time user)
     return fallbackHousehold?.id || undefined;
-  }, [isAuthenticated, cachedHousehold?.id, fallbackHousehold?.id]);
+  }, [isTestMode, testModeState?.sandboxHouseholdId, isAuthenticated, cachedHousehold?.id, fallbackHousehold?.id]);
   
-  // Build household object - prioritize cached household from API if found
-  // Otherwise use cached from localStorage (even if API hasn't loaded yet or household not in API yet)
+  // Build household object - prioritize sandbox when in test mode, then cached household from API
   const household = useMemo(() => {
+    if (isTestMode && testModeState) {
+      return {
+        id: testModeState.sandboxHouseholdId,
+        name: `${testModeState.originalHousehold.name || 'Minhas Finanças'} (Modo Teste)`,
+        role: (testModeState.originalHousehold.role as 'OWNER' | 'EDITOR' | 'VIEWER') || 'OWNER',
+        isSandbox: true,
+      };
+    }
+
     // If we have a cached household ID, ALWAYS try to use it first
     if (isAuthenticated && cachedHousehold?.id) {
       // First try: cached household found in API (has full data with proper structure)
@@ -224,5 +265,6 @@ export function useDefaultHousehold() {
     householdId: householdId || undefined,
     household: household || undefined,
     isLoading: isAuthenticated ? isLoading : false,
+    isTestMode,
   };
 }

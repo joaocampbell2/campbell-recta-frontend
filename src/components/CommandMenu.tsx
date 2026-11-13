@@ -14,11 +14,13 @@ import {
   Moon,
   RefreshCcw,
   Download,
-  Trophy
+  Trophy,
+  FlaskConical,
 } from 'lucide-react';
 import { useI18n } from '../context/I18nContext';
 import { useTheme } from '../context/ThemeContext';
 import { useDemoBlur } from '../context/DemoBlurContext';
+import { useTestMode } from '../context/TestModeContext';
 import { Eye, EyeOff } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useToastContext } from '../context/ToastContext';
@@ -52,6 +54,7 @@ const CommandMenu = ({
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const { isBlurred, toggleBlur } = useDemoBlur();
+  const { isTestMode, startTestMode, stopTestMode } = useTestMode();
   const { install, isInstalled, canInstall } = usePWAInstall();
   const { success, error: showError } = useToastContext();
 
@@ -346,6 +349,13 @@ const CommandMenu = ({
                 <span>{t.installApp || 'Instalar App'}</span>
               </Command.Item>
             )}
+            <Command.Item 
+              onSelect={() => runCommand(isTestMode ? stopTestMode : startTestMode, isTestMode ? 'stopTestMode' : 'startTestMode')}
+              className="flex items-center px-2 py-1.5 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 aria-selected:bg-primary-50 dark:aria-selected:bg-primary-900/30 aria-selected:text-primary-700 dark:aria-selected:text-primary-400"
+            >
+              <FlaskConical className="mr-2 h-4 w-4 text-amber-500" />
+              <span>{isTestMode ? 'Encerrar modo teste (restaurar)' : 'Iniciar modo teste (Sandbox)'}</span>
+            </Command.Item>
           </Command.Group>
 
           {onShowConfetti && (
@@ -357,7 +367,7 @@ const CommandMenu = ({
                 <Sparkles className="mr-2 h-4 w-4" />
                 <span>{t.commandMenuShowConfetti}</span>
               </Command.Item>
-            </Command.Group>
+          </Command.Group>
           )}
         </Command.List>
       </div>

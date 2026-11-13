@@ -11,6 +11,7 @@ import { CurrencyProvider } from './context/CurrencyContext';
 import { I18nProvider } from './context/I18nContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { DemoBlurProvider } from './context/DemoBlurContext';
+import { TestModeProvider } from './context/TestModeContext';
 import { queryClient } from './lib/queryClient';
 import Layout from './components/Layout';
 import { AnalyticsTracker } from './components/AnalyticsTracker';
@@ -240,17 +241,19 @@ function App() {
         <AuthProvider>
           <ThemeProvider>
             <ToastProvider>
-              <I18nProvider>
-                <CurrencyProvider>
-                  <DemoBlurProvider>
-                    <CommandMenuProvider>
-                      <ConfettiProvider>
-                        <AppRoutes />
-                      </ConfettiProvider>
-                    </CommandMenuProvider>
-                  </DemoBlurProvider>
-                </CurrencyProvider>
-              </I18nProvider>
+              <TestModeProvider>
+                <I18nProvider>
+                  <CurrencyProvider>
+                    <DemoBlurProvider>
+                      <CommandMenuProvider>
+                        <ConfettiProvider>
+                          <AppRoutes />
+                        </ConfettiProvider>
+                      </CommandMenuProvider>
+                    </DemoBlurProvider>
+                  </CurrencyProvider>
+                </I18nProvider>
+              </TestModeProvider>
             </ToastProvider>
           </ThemeProvider>
         </AuthProvider>

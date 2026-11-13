@@ -13,6 +13,7 @@ export interface SettleDebtOptions {
 interface SplitSettleDebtModalProps {
   debt: SplitDebt | null;
   accountName: string;
+  reimbursementAccountName?: string;
   baseCurrency: string;
   onClose: () => void;
   onConfirm: (debtId: string, options: SettleDebtOptions) => void;
@@ -21,6 +22,7 @@ interface SplitSettleDebtModalProps {
 const SplitSettleDebtModal: React.FC<SplitSettleDebtModalProps> = ({
   debt,
   accountName,
+  reimbursementAccountName,
   baseCurrency,
   onClose,
   onConfirm,
@@ -135,6 +137,12 @@ const SplitSettleDebtModal: React.FC<SplitSettleDebtModalProps> = ({
                   Não, outro valor
                 </button>
               </div>
+              {mode === 'full' && debt.direction === 'THEY_OWE_ME' && reimbursementAccountName && (
+                <p className="text-xs font-light text-gray-500 dark:text-gray-400 mt-2">
+                  Ao quitar, será lançada uma transação de reembolso ({formatCurrency(remainingSum, baseCurrency)}) na conta{' '}
+                  <span className="font-medium text-gray-900 dark:text-white">{reimbursementAccountName}</span>.
+                </p>
+              )}
             </div>
 
             {mode === 'partial' && (
