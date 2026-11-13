@@ -60,6 +60,7 @@ interface SplitDebtModalProps {
   isSubmitting?: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onSaveAndCreateNew?: () => void;
+  onSwitchToTransaction?: () => void;
 }
 
 const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
@@ -113,6 +114,7 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
   isSubmitting = false,
   onSubmit,
   onSaveAndCreateNew,
+  onSwitchToTransaction,
 }) => {
   if (!isOpen) return null;
 
@@ -140,6 +142,24 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
               <X className="h-6 w-6" />
             </button>
           </div>
+
+          {onSwitchToTransaction && (
+            <div className="grid grid-cols-2 gap-1.5 p-1 mb-4 rounded-lg bg-gray-100 dark:bg-gray-800/80">
+              <button
+                type="button"
+                onClick={onSwitchToTransaction}
+                className="py-1.5 px-3 rounded-md text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Transação
+              </button>
+              <button
+                type="button"
+                className="py-1.5 px-3 rounded-md text-xs font-medium bg-white dark:bg-gray-900 text-primary-600 dark:text-primary-400 shadow-sm"
+              >
+                Divisão de Conta
+              </button>
+            </div>
+          )}
 
           {/* PASSO 1: QUEM */}
           {step === 1 && (

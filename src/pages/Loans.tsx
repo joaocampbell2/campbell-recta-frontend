@@ -164,6 +164,7 @@ const STORAGE_KEYS = {
   IMPORTED_TX_IDS: 'recta_split_imported_tx_ids_v1',
   HIDE_LEGACY_TOOL: 'recta_split_hide_legacy_tool_v1',
   DEFAULT_REIMBURSEMENT_ACCOUNT: 'recta_split_default_reimbursement_account_v1',
+  LAST_DEBT_ACCOUNT: 'recta_split_last_debt_account_v1',
 };
 
 // ============================================================================
@@ -895,7 +896,14 @@ const Loans: React.FC = () => {
     totalAmountMask.setValue('');
     setDebtDesc('');
     setDebtCategory(CategoryName.FOOD);
-    setDebtAccountId(userAccounts[0]?.id || '');
+    const savedLastAccountId = localStorage.getItem(
+      `${STORAGE_KEYS.LAST_DEBT_ACCOUNT}_${householdId || 'default'}`
+    );
+    const initialAccountId =
+      savedLastAccountId && userAccounts.some((a) => a.id === savedLastAccountId)
+        ? savedLastAccountId
+        : userAccounts[0]?.id || '';
+    setDebtAccountId(initialAccountId);
     setAddDebtStep(1);
     setDebtInstallmentsCount('1');
     setDebtDirection('THEY_OWE_ME');
@@ -1061,6 +1069,12 @@ const Loans: React.FC = () => {
     const count = Math.max(1, parseInt(debtInstallmentsCount, 10) || 1);
     const chosenAccountId = debtAccountId || userAccounts[0]?.id || '';
     const chosenAccountName = accountMap.get(chosenAccountId) || userAccounts[0]?.name || '';
+    if (chosenAccountId) {
+      localStorage.setItem(
+        `${STORAGE_KEYS.LAST_DEBT_ACCOUNT}_${householdId || 'default'}`,
+        chosenAccountId
+      );
+    }
 
     const targetMemberIds = selectedMemberIds;
     if (targetMemberIds.length === 0) return;
@@ -1370,24 +1384,26 @@ const Loans: React.FC = () => {
                 <div className="px-3.5 py-1.5 text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800">
                   Conta padrão de reembolsos
                 </div>
-                {userAccounts.map((acc) => {
-                  const isSelected = acc.id === defaultReimbursementAccountId;
-                  return (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      onClick={() => handleSelectDefaultReimbursementAccount(acc.id)}
-                      className={`w-full px-3.5 py-2 text-left text-xs flex items-center justify-between transition-colors ${
-                        isSelected
-                          ? 'bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 font-medium'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <span className="truncate">{acc.name}</span>
-                      {isSelected && <span className="text-xs ml-2">✓</span>}
-                    </button>
-                  );
-                })}
+                <div className="max-h-44 overflow-y-auto">
+                  {userAccounts.map((acc) => {
+                    const isSelected = acc.id === defaultReimbursementAccountId;
+                    return (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => handleSelectDefaultReimbursementAccount(acc.id)}
+                        className={`w-full px-3.5 py-2 text-left text-xs flex items-center justify-between transition-colors ${
+                          isSelected
+                            ? 'bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 font-medium'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <span className="truncate">{acc.name}</span>
+                        {isSelected && <span className="text-xs ml-2">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
                 {!isLegacyToolHidden && (
                   <>
                     <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
@@ -2472,7 +2488,15 @@ const Loans: React.FC = () => {
         onCategoryChange={setDebtCategory}
         userAccounts={userAccounts}
         debtAccountId={debtAccountId}
-        onAccountChange={setDebtAccountId}
+        onAccountChange={(accountId) => {
+          setDebtAccountId(accountId);
+          if (accountId) {
+            localStorage.setItem(
+              `${STORAGE_KEYS.LAST_DEBT_ACCOUNT}_${householdId || 'default'}`,
+              accountId
+            );
+          }
+        }}
         debtDesc={debtDesc}
         onDescChange={setDebtDesc}
         totalAmountValue={totalAmountMask.value}

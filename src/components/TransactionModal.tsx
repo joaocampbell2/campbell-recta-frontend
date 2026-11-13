@@ -28,6 +28,7 @@ import {
   TransactionModalFooter,
   AccountField,
 } from './transactions';
+import SplitDebtWizardModal from './SplitDebtWizardModal';
 
 interface TransactionModalProps {
   transaction: Transaction | null;
@@ -90,6 +91,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
 
   // Estado para controlar se é recorrente
   const [isRecurring, setIsRecurring] = useState(false);
+  const [isSplitDebtMode, setIsSplitDebtMode] = useState(false);
 
   // Estados para campos de recorrência
   const [recurringFrequency, setRecurringFrequency] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'>('monthly');
@@ -921,6 +923,17 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
     }
   };
 
+  if (isSplitDebtMode && !transaction && !readOnly) {
+    return (
+      <SplitDebtWizardModal
+        isOpen={true}
+        onClose={onClose}
+        defaultAccountId={selectedAccountId || defaultAccountId}
+        onSwitchToTransaction={() => setIsSplitDebtMode(false)}
+      />
+    );
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[60] overflow-y-auto">
       {/* Backdrop */}
@@ -938,6 +951,24 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             onClose={onClose}
             readOnly={readOnly}
           />
+
+          {!transaction && !readOnly && (
+            <div className="grid grid-cols-2 gap-1.5 p-1 mb-4 rounded-lg bg-gray-100 dark:bg-gray-800/80">
+              <button
+                type="button"
+                className="py-1.5 px-3 rounded-md text-xs font-medium bg-white dark:bg-gray-900 text-primary-600 dark:text-primary-400 shadow-sm"
+              >
+                Transação
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSplitDebtMode(true)}
+                className="py-1.5 px-3 rounded-md text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Divisão de Conta
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit((data) => onSubmit(data, false))} className="space-y-4 min-w-0">
             {!isCreditCardContext && (
