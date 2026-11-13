@@ -59,6 +59,7 @@ interface SplitDebtModalProps {
   isStep3Valid: boolean;
   isSubmitting?: boolean;
   onSubmit: (e: React.FormEvent) => void;
+  onSaveAndCreateNew?: () => void;
 }
 
 const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
@@ -111,6 +112,7 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
   isStep3Valid,
   isSubmitting = false,
   onSubmit,
+  onSaveAndCreateNew,
 }) => {
   if (!isOpen) return null;
 
@@ -248,7 +250,23 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
 
           {/* PASSO 2: O QUE */}
           {step === 2 && (
-            <div className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                if (debtDirection === 'I_OWE_THEM') {
+                  onSubmit(e);
+                } else {
+                  e.preventDefault();
+                  if (
+                    totalAmountNumeric > 0 &&
+                    debtDesc.trim() &&
+                    selectedMemberIds.length > 0
+                  ) {
+                    onGoToStep3();
+                  }
+                }
+              }}
+              className="space-y-4"
+            >
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Quem pagou
@@ -437,20 +455,52 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                 >
                   Voltar
                 </button>
-                <button
-                  type="button"
-                  disabled={
-                    totalAmountNumeric <= 0 ||
-                    !debtDesc.trim() ||
-                    selectedMemberIds.length === 0
-                  }
-                  onClick={onGoToStep3}
-                  className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity disabled:opacity-50"
-                >
-                  Continuar
-                </button>
+                {debtDirection === 'I_OWE_THEM' ? (
+                  <>
+                    {onSaveAndCreateNew && (
+                      <button
+                        type="button"
+                        onClick={onSaveAndCreateNew}
+                        disabled={
+                          totalAmountNumeric <= 0 ||
+                          !debtDesc.trim() ||
+                          selectedMemberIds.length === 0 ||
+                          isSubmitting
+                        }
+                        className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-900 hover:opacity-70 transition-opacity disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Salvando...' : 'Salvar e criar outra'}
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={
+                        totalAmountNumeric <= 0 ||
+                        !debtDesc.trim() ||
+                        selectedMemberIds.length === 0 ||
+                        isSubmitting
+                      }
+                      className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Criando...' : 'Criar Dívida'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={
+                      totalAmountNumeric <= 0 ||
+                      !debtDesc.trim() ||
+                      selectedMemberIds.length === 0
+                    }
+                    onClick={onGoToStep3}
+                    className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity disabled:opacity-50"
+                  >
+                    Continuar
+                  </button>
+                )}
               </div>
-            </div>
+            </form>
           )}
 
           {/* PASSO 3: DIVISÃO */}
@@ -520,6 +570,15 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                   }
 
                   if (debtSplitRule === 'PERCENTAGE') {
+                    const currentPct =
+                      parseFloat((percentageByParticipant[id] || '0').replace(',', '.')) || 0;
+                    const diffPct = Number((100 - distributedPct).toFixed(2));
+                    const targetPct = Number((currentPct + diffPct).toFixed(2));
+                    const showRestBtn =
+                      splitParticipants.length > 2 &&
+                      Math.abs(diffPct) > 0.01 &&
+                      targetPct >= 0;
+
                     return (
                       <div
                         key={id}
@@ -528,10 +587,20 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                         <span className="text-gray-900 dark:text-gray-100 font-light truncate">
                           {label}
                         </span>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-400">
                             {formatCurrency(shareValue, baseCurrency)}
                           </span>
+                          {showRestBtn && (
+                            <button
+                              type="button"
+                              onClick={() => onPercentageChange(id, String(targetPct))}
+                              className="px-2 py-1 text-[11px] font-medium rounded border border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-950/30 transition-colors"
+                              title="Completar com a porcentagem restante"
+                            >
+                              Resto
+                            </button>
+                          )}
                           <div className="relative w-24">
                             <input
                               type="text"
@@ -552,6 +621,17 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                     );
                   }
 
+                  const currentAmt =
+                    parseFloat(
+                      (amountByParticipant[id] || '0').replace(/\./g, '').replace(',', '.')
+                    ) || 0;
+                  const diffAmt = Number((totalAmountNumeric - distributedTotal).toFixed(2));
+                  const targetAmt = Number((currentAmt + diffAmt).toFixed(2));
+                  const showAmountRestBtn =
+                    splitParticipants.length > 2 &&
+                    Math.abs(diffAmt) > 0.01 &&
+                    targetAmt >= 0;
+
                   return (
                     <div
                       key={id}
@@ -560,20 +640,34 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                       <span className="text-gray-900 dark:text-gray-100 font-light truncate">
                         {label}
                       </span>
-                      <div className="w-32">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={amountByParticipant[id] ?? '0,00'}
-                          onChange={(e) => {
-                            const digits = e.target.value.replace(/\D/g, '');
-                            const formatted = (parseInt(digits || '0', 10) / 100)
-                              .toFixed(2)
-                              .replace('.', ',');
-                            onAmountChange(id, formatted);
-                          }}
-                          className="block w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-right text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 text-sm font-light"
-                        />
+                      <div className="flex items-center gap-2">
+                        {showAmountRestBtn && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onAmountChange(id, targetAmt.toFixed(2).replace('.', ','))
+                            }
+                            className="px-2 py-1 text-[11px] font-medium rounded border border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-950/30 transition-colors"
+                            title="Completar com o valor restante"
+                          >
+                            Resto
+                          </button>
+                        )}
+                        <div className="w-32">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={amountByParticipant[id] ?? '0,00'}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, '');
+                              const formatted = (parseInt(digits || '0', 10) / 100)
+                                .toFixed(2)
+                                .replace('.', ',');
+                              onAmountChange(id, formatted);
+                            }}
+                            className="block w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-right text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 text-sm font-light"
+                          />
+                        </div>
                       </div>
                     </div>
                   );
@@ -606,6 +700,16 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                 >
                   Voltar
                 </button>
+                {onSaveAndCreateNew && (
+                  <button
+                    type="button"
+                    onClick={onSaveAndCreateNew}
+                    disabled={!isStep3Valid || isSubmitting}
+                    className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-900 hover:opacity-70 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? 'Salvando...' : 'Salvar e criar outra'}
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={!isStep3Valid || isSubmitting}

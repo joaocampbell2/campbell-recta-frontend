@@ -173,13 +173,14 @@ const STORAGE_KEYS = {
 const Loans: React.FC = () => {
   const { baseCurrency } = useCurrency();
   const { t } = useI18n();
-  const { error: showError } = useToastContext();
+  const { error: showError, success: showSuccess } = useToastContext();
   const { householdId } = useDefaultHousehold();
   const {
     accounts: contextAccounts,
     transactions,
     customCategories,
     addTransaction,
+    createInstallments,
     deleteTransaction,
   } = useTransactions();
   const { data: regularAccountsData } = useAccounts({ householdId: householdId || '' });
@@ -921,7 +922,7 @@ const Loans: React.FC = () => {
     const baseAmt = Math.floor((total / n) * 100) / 100;
 
     participants.forEach((p, idx) => {
-      if (idx === n - 1) {
+      if (idx === 0) {
         const remPct = Number((100 - basePct * (n - 1)).toFixed(2));
         const remAmt = Number((total - baseAmt * (n - 1)).toFixed(2));
         pctMap[p] = String(remPct);
@@ -948,8 +949,9 @@ const Loans: React.FC = () => {
       const active = equalIncludedIds.filter((id) => splitParticipants.includes(id));
       if (active.length === 0) return shares;
       const base = Math.floor((total / active.length) * 100) / 100;
-      active.forEach((id, idx) => {
-        if (idx === active.length - 1) {
+      const remainderTargetId = active.includes('me') ? 'me' : active[0];
+      active.forEach((id) => {
+        if (id === remainderTargetId) {
           shares[id] = Number((total - base * (active.length - 1)).toFixed(2));
         } else {
           shares[id] = base;
@@ -1043,13 +1045,13 @@ const Loans: React.FC = () => {
     return userAccounts[0]?.name || 'Conta Principal';
   };
 
-  const handleCreateDebt = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateDebt = async (e?: React.FormEvent, shouldCreateNew = false) => {
+    e?.preventDefault();
     const numericTotal = totalAmountMask.numericValue;
     if (
       !debtDesc.trim() ||
       numericTotal <= 0 ||
-      !isStep3Valid ||
+      (debtDirection === 'THEY_OWE_ME' && !isStep3Valid) ||
       isSubmittingDebt ||
       createDebtsMutation.isPending
     ) {
@@ -1101,45 +1103,51 @@ const Loans: React.FC = () => {
           ? `CUSTOM:${debtsCustomCat.id}`
           : CategoryName.DEBTS;
         const txNow = new Date();
-        const txPromises: Promise<void>[] = [];
+        const txPayloads: Array<Parameters<typeof addTransaction>[0]> = [];
 
         const myShareAmount = Number((participantShares['me'] || 0).toFixed(2));
         if (myShareAmount > 0) {
-          txPromises.push(
-            addTransaction({
-              description: debtDesc.trim(),
-              amount: myShareAmount,
-              type: TransactionType.EXPENSE,
-              category: debtCategory,
-              date: txNow,
-              accountId: validAccountId,
-              paid: true,
-            })
-          );
+          txPayloads.push({
+            description: debtDesc.trim(),
+            amount: myShareAmount,
+            type: TransactionType.EXPENSE,
+            category: debtCategory,
+            date: txNow,
+            accountId: validAccountId,
+            paid: count === 1,
+          });
         }
 
         shares.forEach((share) => {
           const friend = friendMap.get(share.friendId);
-          txPromises.push(
-            addTransaction({
-              description: `${debtDesc.trim()}${friend ? ` (${friend.name})` : ''}`,
-              amount: share.debtTotalAmount,
-              type: TransactionType.EXPENSE,
-              category: debtsCategoryValue,
-              date: txNow,
-              accountId: validAccountId,
-              paid: true,
-            })
-          );
+          txPayloads.push({
+            description: `${debtDesc.trim()}${friend ? ` (${friend.name})` : ''}`,
+            amount: share.debtTotalAmount,
+            type: TransactionType.EXPENSE,
+            category: debtsCategoryValue,
+            date: txNow,
+            accountId: validAccountId,
+            paid: count === 1,
+          });
         });
 
-        await Promise.allSettled(txPromises);
+        if (count > 1) {
+          for (const payload of txPayloads) {
+            try {
+              await createInstallments(payload, count);
+            } catch {
+              // Não interrompe a criação das demais séries se uma falhar
+            }
+          }
+        } else {
+          await Promise.allSettled(txPayloads.map((payload) => addTransaction(payload)));
+        }
       } else {
         const payerFriendId =
           debtPayerFriendId && targetMemberIds.includes(debtPayerFriendId)
             ? debtPayerFriendId
             : targetMemberIds[0];
-        const myDebtTotal = participantShares['me'] || 0;
+        const myDebtTotal = numericTotal;
         if (!payerFriendId || myDebtTotal <= 0) return;
 
         const created = await createDebtsMutation.mutateAsync({
@@ -1151,7 +1159,7 @@ const Loans: React.FC = () => {
           originalTotalAmount: numericTotal,
           direction: 'I_OWE_THEM',
           payerFriendId,
-          splitRule: debtSplitRule,
+          splitRule: 'FULL_AMOUNT',
           groupId: debtGroupId || undefined,
           totalInstallments: count,
           shares: [
@@ -1162,14 +1170,42 @@ const Loans: React.FC = () => {
           ],
         });
         if (created?.[0]?.id) setExpandedDebtId(created[0].id);
+
+        // Cria a transação da minha parte na categoria escolhida (parcelada se count > 1)
+        const validAccountId =
+          chosenAccountId && !chosenAccountId.startsWith('acc-') ? chosenAccountId : undefined;
+        const myTxPayload: Parameters<typeof addTransaction>[0] = {
+          description: debtDesc.trim(),
+          amount: Number(myDebtTotal.toFixed(2)),
+          type: TransactionType.EXPENSE,
+          category: debtCategory,
+          date: new Date(),
+          accountId: validAccountId,
+          paid: count === 1,
+        };
+        try {
+          if (count > 1) {
+            await createInstallments(myTxPayload, count);
+          } else {
+            await addTransaction(myTxPayload);
+          }
+        } catch {
+          // Não interrompe o fluxo caso a criação da transação falhe
+        }
       }
 
       // Reset form
       setDebtDesc('');
       totalAmountMask.setValue('');
       setDebtInstallmentsCount('1');
+      setPercentageByParticipant({});
+      setAmountByParticipant({});
       setAddDebtStep(1);
-      setIsAddDebtOpen(false);
+      if (shouldCreateNew) {
+        showSuccess('Dívida criada com sucesso!');
+      } else {
+        setIsAddDebtOpen(false);
+      }
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Erro ao criar despesa dividida');
     } finally {
@@ -1267,7 +1303,14 @@ const Loans: React.FC = () => {
     <div className="px-4 sm:px-6 lg:px-8 dashboard-fade-in pb-16 space-y-8">
       {/* Header */}
       <PageHeader
-        title="Divisão de Contas & Amigos"
+        title={
+          <span className="inline-flex items-center gap-2.5 flex-wrap">
+            <span>Divisão de Contas & Amigos</span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold tracking-wide uppercase bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50">
+              ALPHA
+            </span>
+          </span>
+        }
         description="Gerencie despesas compartilhadas, grupos e acompanhe o saldo mensal e total por amigo."
       >
         <div className="inline-flex items-center gap-0.5 text-xs text-gray-500 dark:text-gray-400 mr-1">
@@ -2452,24 +2495,60 @@ const Loans: React.FC = () => {
           )
         }
         percentageByParticipant={percentageByParticipant}
-        onPercentageChange={(id, val) =>
+        onPercentageChange={(id, val) => {
+          if (splitParticipants.length === 2) {
+            const otherId = splitParticipants.find((p) => p !== id);
+            const rawNum = parseFloat(val.replace(',', '.'));
+            const num = Number.isNaN(rawNum) ? 0 : Math.max(0, rawNum);
+            if (num > 100) {
+              setPercentageByParticipant((prev) => ({
+                ...prev,
+                [id]: '100',
+                ...(otherId ? { [otherId]: '0' } : {}),
+              }));
+            } else {
+              const rem = Number((100 - num).toFixed(2));
+              setPercentageByParticipant((prev) => ({
+                ...prev,
+                [id]: val,
+                ...(otherId ? { [otherId]: String(rem) } : {}),
+              }));
+            }
+            return;
+          }
           setPercentageByParticipant((prev) => ({
             ...prev,
             [id]: val,
-          }))
-        }
+          }));
+        }}
         amountByParticipant={amountByParticipant}
-        onAmountChange={(id, val) =>
+        onAmountChange={(id, val) => {
+          if (splitParticipants.length === 2) {
+            const otherId = splitParticipants.find((p) => p !== id);
+            const total = totalAmountMask.numericValue;
+            const rawNum = parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+            const clamped = Math.min(total, Math.max(0, rawNum));
+            const rem = Math.max(0, Number((total - clamped).toFixed(2)));
+            setAmountByParticipant((prev) => ({
+              ...prev,
+              [id]: clamped.toFixed(2).replace('.', ','),
+              ...(otherId ? { [otherId]: rem.toFixed(2).replace('.', ',') } : {}),
+            }));
+            return;
+          }
           setAmountByParticipant((prev) => ({
             ...prev,
             [id]: val,
-          }))
-        }
+          }));
+        }}
         distributedTotal={distributedTotal}
         distributedPct={distributedPct}
         isStep3Valid={isStep3Valid}
         isSubmitting={isSubmittingDebt || createDebtsMutation.isPending}
         onSubmit={handleCreateDebt}
+        onSaveAndCreateNew={() => {
+          void handleCreateDebt(undefined, true);
+        }}
       />
 
       <SplitDebtDetailModal
