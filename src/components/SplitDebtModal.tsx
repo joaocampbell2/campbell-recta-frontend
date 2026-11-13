@@ -57,6 +57,7 @@ interface SplitDebtModalProps {
   distributedTotal: number;
   distributedPct: number;
   isStep3Valid: boolean;
+  isSubmitting?: boolean;
   onSubmit: (e: React.FormEvent) => void;
 }
 
@@ -108,6 +109,7 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
   distributedTotal,
   distributedPct,
   isStep3Valid,
+  isSubmitting = false,
   onSubmit,
 }) => {
   if (!isOpen) return null;
@@ -606,10 +608,10 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!isStep3Valid}
-                  className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity disabled:opacity-50"
+                  disabled={!isStep3Valid || isSubmitting}
+                  className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Salvar
+                  {isSubmitting ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </form>

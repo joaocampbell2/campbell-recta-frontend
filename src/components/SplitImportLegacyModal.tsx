@@ -134,44 +134,40 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
     );
   };
 
-  // Lista todos os reembolsos (e entradas) ordenados por data
+  // Lista reembolsos ordenados por data (no modo padrão só Reembolso; em "Todas" inclui qualquer entrada)
   const reimbursementCandidates = useMemo(() => {
     const list = allCandidates.filter((c) => {
       const catLower = c.category.toLowerCase();
       const descLower = c.description.toLowerCase();
-      if (catLower.includes('reembolso') || descLower.includes('reembolso')) {
-        return true;
+      const isReimb =
+        catLower.includes('reembolso') || descLower.includes('reembolso');
+      if (filterMode === 'all') {
+        return isReimb || c.type === TransactionType.INCOME;
       }
-      return c.type === TransactionType.INCOME;
+      return isReimb;
     });
     return list.sort((a, b) => b.date.localeCompare(a.date));
-  }, [allCandidates]);
+  }, [allCandidates, filterMode]);
 
   // Lista as dívidas candidatas ordenadas mantendo suas datas originais
   const debtCandidates = useMemo(() => {
     const list = allCandidates.filter((c) => {
-      const catLower = c.category.toLowerCase();
-      const descLower = c.description.toLowerCase();
-      if (
-        c.type === TransactionType.INCOME &&
-        (catLower.includes('reembolso') || descLower.includes('reembolso'))
-      ) {
+      if (c.type !== TransactionType.EXPENSE) {
         return false;
       }
 
       if (filterMode === 'all') {
-        return c.type === TransactionType.EXPENSE;
+        return true;
       }
 
+      const catLower = c.category.toLowerCase().trim();
       return (
         c.categoryName === CategoryName.DEBTS ||
         c.category === CategoryName.DEBTS ||
-        catLower.includes('dívida') ||
-        catLower.includes('divida') ||
-        catLower.includes('empréstimo') ||
-        catLower.includes('emprestimo') ||
-        descLower.includes('dívida') ||
-        descLower.includes('divida')
+        catLower === 'dívidas' ||
+        catLower === 'dividas' ||
+        catLower === 'dívida' ||
+        catLower === 'divida'
       );
     });
     return list.sort((a, b) => b.date.localeCompare(a.date));
@@ -255,7 +251,7 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
   const handleConfirm = (e: React.FormEvent) => {
     e.preventDefault();
     const items: LegacyImportItem[] = selectedIds
-      .map((txId) => {
+      .map((txId): LegacyImportItem | null => {
         const tx = debtCandidates.find((c) => c.id === txId);
         const friendId = friendByTx[txId] || friends[0]?.id;
         if (!tx || !friendId) return null;

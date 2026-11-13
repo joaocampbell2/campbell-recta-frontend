@@ -26,6 +26,7 @@ interface SplitContactModalProps {
   onGroupPhotoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveGroupPhoto: () => void;
   onAddGroup: (e: React.FormEvent) => void;
+  isSubmitting?: boolean;
 }
 
 const SplitContactModal: React.FC<SplitContactModalProps> = ({
@@ -50,6 +51,7 @@ const SplitContactModal: React.FC<SplitContactModalProps> = ({
   onGroupPhotoChange,
   onRemoveGroupPhoto,
   onAddGroup,
+  isSubmitting = false,
 }) => {
   if (!isOpen) return null;
 
@@ -178,9 +180,10 @@ const SplitContactModal: React.FC<SplitContactModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity"
+                  disabled={isSubmitting}
+                  className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Salvar
+                  {isSubmitting ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </form>
@@ -277,9 +280,10 @@ const SplitContactModal: React.FC<SplitContactModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity"
+                  disabled={isSubmitting}
+                  className="px-4 py-2.5 border border-primary-600 dark:border-primary-500 rounded-md text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Salvar
+                  {isSubmitting ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </form>

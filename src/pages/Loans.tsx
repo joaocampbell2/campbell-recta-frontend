@@ -24,7 +24,7 @@ import {
   Wallet,
   Archive,
   ArchiveRestore,
-  MoreHorizontal,
+  Settings,
   X,
 } from 'lucide-react';
 import {
@@ -236,9 +236,9 @@ const Loans: React.FC = () => {
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
   const [addContactTab, setAddContactTab] = useState<'friend' | 'group'>('friend');
   const [isAddDebtOpen, setIsAddDebtOpen] = useState(false);
+  const [isSubmittingDebt, setIsSubmittingDebt] = useState(false);
   const [isImportLegacyOpen, setIsImportLegacyOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-  const [isReimbursementMenuOpen, setIsReimbursementMenuOpen] = useState(false);
   const [defaultReimbursementAccountId, setDefaultReimbursementAccountId] = useState<string>(() => {
     try {
       const key = `${STORAGE_KEYS.DEFAULT_REIMBURSEMENT_ACCOUNT}_${householdId || 'default'}`;
@@ -269,7 +269,7 @@ const Loans: React.FC = () => {
 
   const handleSelectDefaultReimbursementAccount = (accountId: string) => {
     setDefaultReimbursementAccountId(accountId);
-    setIsReimbursementMenuOpen(false);
+    setIsMoreMenuOpen(false);
     try {
       const key = `${STORAGE_KEYS.DEFAULT_REIMBURSEMENT_ACCOUNT}_${householdId || 'default'}`;
       localStorage.setItem(key, accountId);
@@ -516,7 +516,7 @@ const Loans: React.FC = () => {
 
   const handleAddFriend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFriendName.trim()) return;
+    if (!newFriendName.trim() || createFriendMutation.isPending) return;
     const avatarColor = AVATAR_COLORS[friends.length % AVATAR_COLORS.length];
     try {
       await createFriendMutation.mutateAsync({
@@ -590,7 +590,7 @@ const Loans: React.FC = () => {
 
   const handleAddGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGroupName.trim()) return;
+    if (!newGroupName.trim() || createGroupMutation.isPending) return;
     try {
       await createGroupMutation.mutateAsync({
         householdId: householdId || undefined,
@@ -1046,7 +1046,15 @@ const Loans: React.FC = () => {
   const handleCreateDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     const numericTotal = totalAmountMask.numericValue;
-    if (!debtDesc.trim() || numericTotal <= 0 || !isStep3Valid) return;
+    if (
+      !debtDesc.trim() ||
+      numericTotal <= 0 ||
+      !isStep3Valid ||
+      isSubmittingDebt ||
+      createDebtsMutation.isPending
+    ) {
+      return;
+    }
 
     const count = Math.max(1, parseInt(debtInstallmentsCount, 10) || 1);
     const chosenAccountId = debtAccountId || userAccounts[0]?.id || '';
@@ -1055,6 +1063,7 @@ const Loans: React.FC = () => {
     const targetMemberIds = selectedMemberIds;
     if (targetMemberIds.length === 0) return;
 
+    setIsSubmittingDebt(true);
     try {
       if (debtDirection === 'THEY_OWE_ME') {
         const shares = targetMemberIds
@@ -1080,6 +1089,51 @@ const Loans: React.FC = () => {
           shares,
         });
         if (created?.[0]?.id) setExpandedDebtId(created[0].id);
+
+        // Cria N transações (1 para a minha parte na categoria selecionada + 1 por amigo na categoria Dívidas)
+        const validAccountId =
+          chosenAccountId && !chosenAccountId.startsWith('acc-') ? chosenAccountId : undefined;
+        const debtsCustomCat = customCategories?.find((c) => {
+          const lower = c.name.toLowerCase();
+          return lower.includes('dívida') || lower.includes('divida');
+        });
+        const debtsCategoryValue = debtsCustomCat
+          ? `CUSTOM:${debtsCustomCat.id}`
+          : CategoryName.DEBTS;
+        const txNow = new Date();
+        const txPromises: Promise<void>[] = [];
+
+        const myShareAmount = Number((participantShares['me'] || 0).toFixed(2));
+        if (myShareAmount > 0) {
+          txPromises.push(
+            addTransaction({
+              description: debtDesc.trim(),
+              amount: myShareAmount,
+              type: TransactionType.EXPENSE,
+              category: debtCategory,
+              date: txNow,
+              accountId: validAccountId,
+              paid: true,
+            })
+          );
+        }
+
+        shares.forEach((share) => {
+          const friend = friendMap.get(share.friendId);
+          txPromises.push(
+            addTransaction({
+              description: `${debtDesc.trim()}${friend ? ` (${friend.name})` : ''}`,
+              amount: share.debtTotalAmount,
+              type: TransactionType.EXPENSE,
+              category: debtsCategoryValue,
+              date: txNow,
+              accountId: validAccountId,
+              paid: true,
+            })
+          );
+        });
+
+        await Promise.allSettled(txPromises);
       } else {
         const payerFriendId =
           debtPayerFriendId && targetMemberIds.includes(debtPayerFriendId)
@@ -1118,6 +1172,8 @@ const Loans: React.FC = () => {
       setIsAddDebtOpen(false);
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Erro ao criar despesa dividida');
+    } finally {
+      setIsSubmittingDebt(false);
     }
   };
 
@@ -1254,22 +1310,18 @@ const Loans: React.FC = () => {
         <div className="relative">
           <button
             type="button"
-            onClick={() => setIsReimbursementMenuOpen((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-xs font-light text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            title="Conta padrão para receber reembolsos"
+            onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+            className="p-2 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            title="Configurações da página"
+            aria-label="Configurações da página"
           >
-            <Wallet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-            <span className="hidden sm:inline text-gray-400 dark:text-gray-500">Reembolso:</span>
-            <span className="font-medium truncate max-w-[110px]">
-              {defaultReimbursementAccountName}
-            </span>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <Settings className="w-4 h-4" />
           </button>
-          {isReimbursementMenuOpen && (
+          {isMoreMenuOpen && (
             <>
               <div
                 className="fixed inset-0 z-30"
-                onClick={() => setIsReimbursementMenuOpen(false)}
+                onClick={() => setIsMoreMenuOpen(false)}
               />
               <div className="absolute right-0 mt-1.5 w-64 z-40 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-lg py-1.5">
                 <div className="px-3.5 py-1.5 text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800">
@@ -1293,54 +1345,36 @@ const Loans: React.FC = () => {
                     </button>
                   );
                 })}
+                {!isLegacyToolHidden && (
+                  <>
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreMenuOpen(false);
+                        setIsImportLegacyOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      Converter transações antigas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreMenuOpen(false);
+                        setIsLegacyToolHidden(true);
+                        localStorage.setItem(STORAGE_KEYS.HIDE_LEGACY_TOOL, 'true');
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      Ocultar este atalho
+                    </button>
+                  </>
+                )}
               </div>
             </>
           )}
         </div>
-        {!isLegacyToolHidden && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-              className="p-2 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              title="Mais opções"
-              aria-label="Mais opções"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-            {isMoreMenuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-30"
-                  onClick={() => setIsMoreMenuOpen(false)}
-                />
-                <div className="absolute right-0 mt-1.5 w-60 z-40 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-lg py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMoreMenuOpen(false);
-                      setIsImportLegacyOpen(true);
-                    }}
-                    className="w-full px-3.5 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    Converter transações antigas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMoreMenuOpen(false);
-                      setIsLegacyToolHidden(true);
-                      localStorage.setItem(STORAGE_KEYS.HIDE_LEGACY_TOOL, 'true');
-                    }}
-                    className="w-full px-3.5 py-2 text-left text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    Ocultar este atalho
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </PageHeader>
 
       {/* 4 KPI Cards: Separando MÊS vs TOTAL */}
@@ -2367,6 +2401,7 @@ const Loans: React.FC = () => {
         onGroupPhotoChange={handleGroupPhotoChange}
         onRemoveGroupPhoto={() => setNewGroupPhoto('')}
         onAddGroup={handleAddGroup}
+        isSubmitting={createFriendMutation.isPending || createGroupMutation.isPending}
       />
 
       <SplitDebtModal
@@ -2433,6 +2468,7 @@ const Loans: React.FC = () => {
         distributedTotal={distributedTotal}
         distributedPct={distributedPct}
         isStep3Valid={isStep3Valid}
+        isSubmitting={isSubmittingDebt || createDebtsMutation.isPending}
         onSubmit={handleCreateDebt}
       />
 
