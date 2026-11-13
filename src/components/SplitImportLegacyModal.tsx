@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { X, Check, ChevronDown } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { formatCurrency, formatDate } from '../utils/format';
 import { CategoryName, TransactionType } from '../lib/enums';
 import type { Transaction } from '../types';
@@ -36,102 +36,7 @@ interface CandidateTx {
   type: TransactionType;
   accountId?: string;
   accountName: string;
-  isMock?: boolean;
 }
-
-const getMockLegacyTransactions = (): CandidateTx[] => {
-  const now = new Date();
-  const d1 = format(addDays(now, -18), 'yyyy-MM-dd');
-  const d2 = format(addDays(now, -14), 'yyyy-MM-dd');
-  const d3 = format(addDays(now, -10), 'yyyy-MM-dd');
-  const r1 = format(addDays(now, -12), 'yyyy-MM-dd');
-  const r2 = format(addDays(now, -7), 'yyyy-MM-dd');
-  const r3 = format(addDays(now, -4), 'yyyy-MM-dd');
-  const r4 = format(addDays(now, -2), 'yyyy-MM-dd');
-
-  return [
-    {
-      id: 'legacy-tx-1',
-      description: 'Uber volta da festa (Lucas)',
-      amount: 48.5,
-      date: d1,
-      category: 'Dívidas',
-      categoryName: CategoryName.DEBTS,
-      type: TransactionType.EXPENSE,
-      accountId: 'acc-card',
-      accountName: 'Cartão de Crédito',
-      isMock: true,
-    },
-    {
-      id: 'legacy-tx-2',
-      description: 'Rodízio Japonês Mariana',
-      amount: 165,
-      date: d2,
-      category: 'Dívidas',
-      categoryName: CategoryName.DEBTS,
-      type: TransactionType.EXPENSE,
-      accountId: 'acc-bank',
-      accountName: 'Conta Bancária',
-      isMock: true,
-    },
-    {
-      id: 'legacy-tx-3',
-      description: 'Ingresso Cinema Pedro',
-      amount: 60,
-      date: d3,
-      category: 'Dívidas',
-      categoryName: CategoryName.DEBTS,
-      type: TransactionType.EXPENSE,
-      accountId: 'acc-card',
-      accountName: 'Cartão de Crédito',
-      isMock: true,
-    },
-    {
-      id: 'legacy-reimb-1',
-      description: 'Reembolso Rodízio Mariana',
-      amount: 165,
-      date: r1,
-      category: 'Reembolso',
-      type: TransactionType.INCOME,
-      accountId: 'acc-bank',
-      accountName: 'Conta Bancária',
-      isMock: true,
-    },
-    {
-      id: 'legacy-reimb-2',
-      description: 'Pix Pedro (1ª parte ingresso)',
-      amount: 25,
-      date: r2,
-      category: 'Reembolso',
-      type: TransactionType.INCOME,
-      accountId: 'acc-bank',
-      accountName: 'Conta Bancária',
-      isMock: true,
-    },
-    {
-      id: 'legacy-reimb-3',
-      description: 'Pix Pedro (2ª parte ingresso)',
-      amount: 20,
-      date: r3,
-      category: 'Reembolso',
-      type: TransactionType.INCOME,
-      accountId: 'acc-bank',
-      accountName: 'Conta Bancária',
-      isMock: true,
-    },
-    {
-      id: 'legacy-reimb-4',
-      description: 'Reembolso Uber Lucas',
-      amount: 30,
-      date: r4,
-      category: 'Reembolso',
-      type: TransactionType.INCOME,
-      accountId: 'acc-bank',
-      accountName: 'Conta Bancária',
-      isMock: true,
-    },
-  ];
-};
 
 const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
   isOpen,
@@ -212,10 +117,7 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
       };
     });
 
-    const combined =
-      realMapped.length > 0 ? realMapped : getMockLegacyTransactions();
-
-    return combined.filter((c) => !importedTxIds.includes(c.id));
+    return realMapped.filter((c) => !importedTxIds.includes(c.id));
   }, [backendLegacyCandidates, transactions, accountMap, importedTxIds]);
 
   const isReimbursementTx = (c: CandidateTx) => {

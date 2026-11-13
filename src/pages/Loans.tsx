@@ -38,6 +38,7 @@ import { format, addMonths, isSameMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCurrency } from '../context/CurrencyContext';
 import { useI18n } from '../context/I18nContext';
+import { useToastContext } from '../context/ToastContext';
 import { useTransactions } from '../context/TransactionsContext';
 import { useDefaultHousehold } from '../hooks/useDefaultHousehold';
 import { useAccounts } from '../hooks/api/useAccounts';
@@ -138,10 +139,6 @@ export interface SplitDebt {
   forgivenAmount?: number;
 }
 
-// ============================================================================
-// Initial Mock Data (para visualização imediata antes do backend)
-// ============================================================================
-
 const AVATAR_COLORS = [
   'bg-purple-500',
   'bg-sky-500',
@@ -163,154 +160,7 @@ const CHART_COLORS = [
   '#ec4899',
 ];
 
-const getInitialFriends = (): Friend[] => [
-  { id: 'f-1', name: 'Lucas Mendes', emailOrPix: 'lucas@email.com', avatarColor: 'bg-purple-500' },
-  { id: 'f-2', name: 'Mariana Costa', emailOrPix: 'mari.pix@email.com', avatarColor: 'bg-sky-500' },
-  { id: 'f-3', name: 'Pedro Alves', emailOrPix: '(11) 99812-3456', avatarColor: 'bg-emerald-500' },
-  { id: 'f-4', name: 'Julia Santos', emailOrPix: 'julia.santos@email.com', avatarColor: 'bg-rose-500' },
-];
-
-const getInitialGroups = (): SplitGroup[] => [
-  {
-    id: 'g-1',
-    name: 'Viagem Floripa',
-    category: 'trip',
-    memberIds: ['f-1', 'f-2', 'f-3'],
-  },
-  {
-    id: 'g-2',
-    name: 'Churrasco de Fim de Semana',
-    category: 'food',
-    memberIds: ['f-1', 'f-3', 'f-4'],
-  },
-  {
-    id: 'g-3',
-    name: 'Apartamento / Contas Fixas',
-    category: 'home',
-    memberIds: ['f-2'],
-  },
-];
-
-const buildInitialDebts = (): SplitDebt[] => {
-  const now = new Date();
-  const currentMonthStr = format(now, 'yyyy-MM-10');
-  const prevMonthStr = format(addMonths(now, -1), 'yyyy-MM-10');
-
-  const createInstallments = (
-    prefix: string,
-    totalInstallments: number,
-    installmentAmount: number,
-    startMonthOffset: number,
-    paidUpTo: number
-  ): DebtInstallment[] => {
-    return Array.from({ length: totalInstallments }, (_, idx) => {
-      const num = idx + 1;
-      const due = addMonths(now, startMonthOffset + idx);
-      const isPaid = num <= paidUpTo;
-      return {
-        id: `${prefix}-inst-${num}`,
-        installmentNumber: num,
-        totalInstallments,
-        amount: installmentAmount,
-        dueDate: format(due, 'yyyy-MM-10'),
-        paid: isPaid,
-        paidAt: isPaid ? format(due, 'yyyy-MM-12') : undefined,
-        paidNote: isPaid ? 'Pago via Pix' : undefined,
-      };
-    });
-  };
-
-  return [
-    {
-      id: 'd-1',
-      description: 'Airbnb Floripa',
-      category: CategoryName.HOUSING,
-      originalTotalAmount: 2400,
-      debtTotalAmount: 1200,
-      direction: 'THEY_OWE_ME',
-      splitRule: 'FIFTY_FIFTY',
-      friendId: 'f-1',
-      groupId: 'g-1',
-      createdAt: prevMonthStr,
-      totalInstallments: 6,
-      installments: createInstallments('d-1', 6, 200, -1, 1),
-    },
-    {
-      id: 'd-2',
-      description: 'Passagens Aéreas Mariana',
-      category: CategoryName.TRANSPORTATION,
-      originalTotalAmount: 1600,
-      debtTotalAmount: 800,
-      direction: 'THEY_OWE_ME',
-      splitRule: 'FIFTY_FIFTY',
-      friendId: 'f-2',
-      groupId: 'g-1',
-      createdAt: currentMonthStr,
-      totalInstallments: 4,
-      installments: createInstallments('d-2', 4, 200, 0, 0),
-    },
-    {
-      id: 'd-3',
-      description: 'Jantar Outback',
-      category: CategoryName.RESTAURANT,
-      originalTotalAmount: 280,
-      debtTotalAmount: 140,
-      direction: 'THEY_OWE_ME',
-      splitRule: 'FIFTY_FIFTY',
-      friendId: 'f-3',
-      groupId: 'g-2',
-      createdAt: currentMonthStr,
-      totalInstallments: 1,
-      installments: createInstallments('d-3', 1, 140, 0, 0),
-    },
-    {
-      id: 'd-4',
-      description: 'Ingresso Show',
-      category: CategoryName.ENTERTAINMENT,
-      originalTotalAmount: 450,
-      debtTotalAmount: 450,
-      direction: 'THEY_OWE_ME',
-      splitRule: 'FULL_AMOUNT',
-      friendId: 'f-4',
-      createdAt: currentMonthStr,
-      totalInstallments: 3,
-      installments: createInstallments('d-4', 3, 150, 0, 0),
-    },
-    {
-      id: 'd-5',
-      description: 'Uber Aeroporto',
-      category: CategoryName.TRANSPORTATION,
-      originalTotalAmount: 120,
-      debtTotalAmount: 60,
-      direction: 'I_OWE_THEM',
-      splitRule: 'FIFTY_FIFTY',
-      friendId: 'f-1',
-      groupId: 'g-1',
-      createdAt: currentMonthStr,
-      totalInstallments: 1,
-      installments: createInstallments('d-5', 1, 60, 0, 0),
-    },
-    {
-      id: 'd-6',
-      description: 'Mercado Churrasco',
-      category: CategoryName.GROCERIES,
-      originalTotalAmount: 360,
-      debtTotalAmount: 180,
-      direction: 'THEY_OWE_ME',
-      splitRule: 'FIFTY_FIFTY',
-      friendId: 'f-3',
-      groupId: 'g-2',
-      createdAt: prevMonthStr,
-      totalInstallments: 1,
-      installments: createInstallments('d-6', 1, 180, -1, 1),
-    },
-  ];
-};
-
 const STORAGE_KEYS = {
-  FRIENDS: 'recta_split_friends_v1',
-  GROUPS: 'recta_split_groups_v1',
-  DEBTS: 'recta_split_debts_v1',
   IMPORTED_TX_IDS: 'recta_split_imported_tx_ids_v1',
   HIDE_LEGACY_TOOL: 'recta_split_hide_legacy_tool_v1',
   DEFAULT_REIMBURSEMENT_ACCOUNT: 'recta_split_default_reimbursement_account_v1',
@@ -323,6 +173,7 @@ const STORAGE_KEYS = {
 const Loans: React.FC = () => {
   const { baseCurrency } = useCurrency();
   const { t } = useI18n();
+  const { error: showError } = useToastContext();
   const { householdId } = useDefaultHousehold();
   const {
     accounts: contextAccounts,
@@ -333,7 +184,7 @@ const Loans: React.FC = () => {
   } = useTransactions();
   const { data: regularAccountsData } = useAccounts({ householdId: householdId || '' });
 
-  // Queries & Mutations prontas para o Backend (com fallback ativo para os mocks locais)
+  // Queries & Mutations do Backend
   const { data: backendFriends } = useSplitFriends(householdId || undefined);
   const { data: backendGroups } = useSplitGroups(householdId || undefined);
   const { data: backendDebts } = useSplitDebts(householdId || undefined);
@@ -355,17 +206,10 @@ const Loans: React.FC = () => {
     const raw = regularAccountsData?.accounts?.length
       ? regularAccountsData.accounts
       : contextAccounts || [];
-    if (raw.length > 0) {
-      return raw.map((acc) => ({
-        id: acc.id || acc.name,
-        name: acc.name,
-      }));
-    }
-    return [
-      { id: 'acc-card', name: 'Cartão de Crédito' },
-      { id: 'acc-bank', name: 'Conta Bancária' },
-      { id: 'acc-cash', name: 'Dinheiro' },
-    ];
+    return raw.map((acc) => ({
+      id: acc.id || acc.name,
+      name: acc.name,
+    }));
   }, [regularAccountsData, contextAccounts]);
 
   const accountMap = useMemo(() => {
@@ -374,63 +218,9 @@ const Loans: React.FC = () => {
     return map;
   }, [userAccounts]);
 
-  // State with localStorage persistence for frontend prototyping
-  const [friends, setFriends] = useState<Friend[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.FRIENDS);
-      return saved ? JSON.parse(saved) : getInitialFriends();
-    } catch {
-      return getInitialFriends();
-    }
-  });
-
-  const [groups, setGroups] = useState<SplitGroup[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.GROUPS);
-      return saved ? JSON.parse(saved) : getInitialGroups();
-    } catch {
-      return getInitialGroups();
-    }
-  });
-
-  const [debts, setDebts] = useState<SplitDebt[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.DEBTS);
-      return saved ? JSON.parse(saved) : buildInitialDebts();
-    } catch {
-      return buildInitialDebts();
-    }
-  });
-
-  useEffect(() => {
-    if (Array.isArray(backendFriends) && backendFriends.length > 0) {
-      setFriends(backendFriends);
-    }
-  }, [backendFriends]);
-
-  useEffect(() => {
-    if (Array.isArray(backendGroups) && backendGroups.length > 0) {
-      setGroups(backendGroups);
-    }
-  }, [backendGroups]);
-
-  useEffect(() => {
-    if (Array.isArray(backendDebts) && backendDebts.length > 0) {
-      setDebts(backendDebts);
-    }
-  }, [backendDebts]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.FRIENDS, JSON.stringify(friends));
-  }, [friends]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups));
-  }, [groups]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.DEBTS, JSON.stringify(debts));
-  }, [debts]);
+  const friends = useMemo(() => backendFriends ?? [], [backendFriends]);
+  const groups = useMemo(() => backendGroups ?? [], [backendGroups]);
+  const debts = useMemo(() => backendDebts ?? [], [backendDebts]);
 
   // Filters & Navigation State
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
@@ -440,7 +230,7 @@ const Loans: React.FC = () => {
   const [showArchivedFriends, setShowArchivedFriends] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'open' | 'installments' | 'history'>('open');
-  const [expandedDebtId, setExpandedDebtId] = useState<string | null>('d-1');
+  const [expandedDebtId, setExpandedDebtId] = useState<string | null>(null);
 
   // Modals State
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
@@ -724,31 +514,25 @@ const Loans: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleAddFriend = (e: React.FormEvent) => {
+  const handleAddFriend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFriendName.trim()) return;
     const avatarColor = AVATAR_COLORS[friends.length % AVATAR_COLORS.length];
-    const newFriend: Friend = {
-      id: `f-${Date.now()}`,
-      name: newFriendName.trim(),
-      emailOrPix: newFriendContact.trim() || undefined,
-      avatarColor,
-      avatarUrl: newFriendPhoto || undefined,
-    };
-    setFriends((prev) => [...prev, newFriend]);
-    createFriendMutation
-      .mutateAsync({
+    try {
+      await createFriendMutation.mutateAsync({
         householdId: householdId || undefined,
-        name: newFriend.name,
-        emailOrPix: newFriend.emailOrPix,
+        name: newFriendName.trim(),
+        emailOrPix: newFriendContact.trim() || undefined,
         avatarColor,
-        avatarUrl: newFriend.avatarUrl,
-      })
-      .catch(() => {});
-    setNewFriendName('');
-    setNewFriendContact('');
-    setNewFriendPhoto('');
-    setIsAddFriendOpen(false);
+        avatarUrl: newFriendPhoto || undefined,
+      });
+      setNewFriendName('');
+      setNewFriendContact('');
+      setNewFriendPhoto('');
+      setIsAddFriendOpen(false);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao adicionar amigo');
+    }
   };
 
   const handleToggleArchiveFriend = (id: string, e: React.MouseEvent) => {
@@ -762,14 +546,13 @@ const Loans: React.FC = () => {
         : `Deseja reativar ${target?.name || 'este amigo'} na lista principal?`,
       confirmText: nextArchived ? 'Arquivar' : 'Desarquivar',
       variant: 'warning',
-      onConfirm: () => {
-        setFriends((prev) =>
-          prev.map((f) => (f.id === id ? { ...f, archived: nextArchived } : f))
-        );
-        archiveFriendMutation
-          .mutateAsync({ id, archived: nextArchived })
-          .catch(() => {});
-        if (selectedFriendId === id) setSelectedFriendId('all');
+      onConfirm: async () => {
+        try {
+          await archiveFriendMutation.mutateAsync({ id, archived: nextArchived });
+          if (selectedFriendId === id) setSelectedFriendId('all');
+        } catch (err) {
+          showError(err instanceof Error ? err.message : 'Erro ao atualizar amigo');
+        }
       },
     });
   };
@@ -782,17 +565,13 @@ const Loans: React.FC = () => {
       message: `Tem certeza que deseja excluir ${target?.name || 'este amigo'}? Todas as dívidas associadas a ele também serão apagadas. Se quiser manter o histórico, use a opção de arquivar.`,
       confirmText: 'Excluir amigo',
       variant: 'danger',
-      onConfirm: () => {
-        setFriends((prev) => prev.filter((f) => f.id !== id));
-        setDebts((prev) => prev.filter((d) => d.friendId !== id));
-        setGroups((prev) =>
-          prev.map((g) => ({
-            ...g,
-            memberIds: g.memberIds.filter((mId) => mId !== id),
-          }))
-        );
-        deleteFriendMutation.mutateAsync(id).catch(() => {});
-        if (selectedFriendId === id) setSelectedFriendId('all');
+      onConfirm: async () => {
+        try {
+          await deleteFriendMutation.mutateAsync(id);
+          if (selectedFriendId === id) setSelectedFriendId('all');
+        } catch (err) {
+          showError(err instanceof Error ? err.message : 'Erro ao excluir amigo');
+        }
       },
     });
   };
@@ -809,30 +588,24 @@ const Loans: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleAddGroup = (e: React.FormEvent) => {
+  const handleAddGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
-    const newGroup: SplitGroup = {
-      id: `g-${Date.now()}`,
-      name: newGroupName.trim(),
-      category: newGroupCategory,
-      memberIds: newGroupMembers,
-      avatarUrl: newGroupPhoto || undefined,
-    };
-    setGroups((prev) => [...prev, newGroup]);
-    createGroupMutation
-      .mutateAsync({
+    try {
+      await createGroupMutation.mutateAsync({
         householdId: householdId || undefined,
-        name: newGroup.name,
-        category: newGroup.category,
-        memberIds: newGroup.memberIds,
-        avatarUrl: newGroup.avatarUrl,
-      })
-      .catch(() => {});
-    setNewGroupName('');
-    setNewGroupMembers([]);
-    setNewGroupPhoto('');
-    setIsAddFriendOpen(false);
+        name: newGroupName.trim(),
+        category: newGroupCategory,
+        memberIds: newGroupMembers,
+        avatarUrl: newGroupPhoto || undefined,
+      });
+      setNewGroupName('');
+      setNewGroupMembers([]);
+      setNewGroupPhoto('');
+      setIsAddFriendOpen(false);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao criar grupo');
+    }
   };
 
   const handleToggleArchiveGroup = (id: string, e: React.MouseEvent) => {
@@ -846,14 +619,13 @@ const Loans: React.FC = () => {
         : `Deseja reativar o grupo "${target?.name || ''}" na lista principal?`,
       confirmText: nextArchived ? 'Arquivar' : 'Desarquivar',
       variant: 'warning',
-      onConfirm: () => {
-        setGroups((prev) =>
-          prev.map((g) => (g.id === id ? { ...g, archived: nextArchived } : g))
-        );
-        archiveGroupMutation
-          .mutateAsync({ id, archived: nextArchived })
-          .catch(() => {});
-        if (selectedGroupId === id) setSelectedGroupId('all');
+      onConfirm: async () => {
+        try {
+          await archiveGroupMutation.mutateAsync({ id, archived: nextArchived });
+          if (selectedGroupId === id) setSelectedGroupId('all');
+        } catch (err) {
+          showError(err instanceof Error ? err.message : 'Erro ao atualizar grupo');
+        }
       },
     });
   };
@@ -866,13 +638,13 @@ const Loans: React.FC = () => {
       message: `Tem certeza que deseja excluir o grupo "${target?.name || ''}"? Se quiser guardar como histórico de viagem/evento, use a opção de arquivar.`,
       confirmText: 'Excluir grupo',
       variant: 'danger',
-      onConfirm: () => {
-        setGroups((prev) => prev.filter((g) => g.id !== id));
-        setDebts((prev) =>
-          prev.map((d) => (d.groupId === id ? { ...d, groupId: undefined } : d))
-        );
-        deleteGroupMutation.mutateAsync(id).catch(() => {});
-        if (selectedGroupId === id) setSelectedGroupId('all');
+      onConfirm: async () => {
+        try {
+          await deleteGroupMutation.mutateAsync(id);
+          if (selectedGroupId === id) setSelectedGroupId('all');
+        } catch (err) {
+          showError(err instanceof Error ? err.message : 'Erro ao excluir grupo');
+        }
       },
     });
   };
@@ -923,42 +695,26 @@ const Loans: React.FC = () => {
         : `Deseja desmarcar o pagamento da parcela ${targetInst.installmentNumber}/${targetInst.totalInstallments} de "${targetDebt.description}" e deixá-la pendente novamente?`,
       confirmText: nextPaid ? 'Marcar como paga' : 'Reabrir parcela',
       variant: nextPaid ? 'info' : 'warning',
-      onConfirm: () => {
-        setDebts((prev) =>
-          prev.map((debt) => {
-            if (debt.id !== debtId) return debt;
-            return {
-              ...debt,
-              installments: debt.installments.map((inst) => {
-                if (inst.id !== installmentId) return inst;
-                return {
-                  ...inst,
-                  paid: nextPaid,
-                  paidAt,
-                  paidNote: note,
-                };
-              }),
-            };
-          })
-        );
-
-        toggleInstallmentMutation
-          .mutateAsync({
+      onConfirm: async () => {
+        try {
+          await toggleInstallmentMutation.mutateAsync({
             debtId,
             installmentId,
             paid: nextPaid,
             paidAt,
             paidNote: note,
-          })
-          .catch(() => {});
+          });
 
-        if (nextPaid && targetDebt.direction === 'THEY_OWE_ME') {
-          const otherUnpaidCount = targetDebt.installments.filter(
-            (i) => i.id !== installmentId && !i.paid
-          ).length;
-          if (otherUnpaidCount === 0) {
-            createReimbursementTransaction(targetDebt, targetDebt.debtTotalAmount);
+          if (nextPaid && targetDebt.direction === 'THEY_OWE_ME') {
+            const otherUnpaidCount = targetDebt.installments.filter(
+              (i) => i.id !== installmentId && !i.paid
+            ).length;
+            if (otherUnpaidCount === 0) {
+              createReimbursementTransaction(targetDebt, targetDebt.debtTotalAmount);
+            }
           }
+        } catch (err) {
+          showError(err instanceof Error ? err.message : 'Erro ao atualizar parcela');
         }
       },
     });
@@ -968,170 +724,74 @@ const Loans: React.FC = () => {
     setSettleModalDebtId(debtId);
   };
 
-  const handleConfirmSettleDebt = (debtId: string, options: SettleDebtOptions) => {
+  const handleConfirmSettleDebt = async (debtId: string, options: SettleDebtOptions) => {
     const targetDebt = debts.find((d) => d.id === debtId);
     if (!targetDebt) return;
 
-    settleDebtMutation
-      .mutateAsync({
+    try {
+      await settleDebtMutation.mutateAsync({
         debtId,
         ...options,
-      })
-      .catch(() => {});
+      });
 
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+      if (options.mode === 'full') {
+        const unpaidSum = targetDebt.installments
+          .filter((i) => !i.paid)
+          .reduce((s, i) => s + i.amount, 0);
 
-    if (options.mode === 'full') {
-      const unpaidSum = targetDebt.installments
-        .filter((i) => !i.paid)
-        .reduce((s, i) => s + i.amount, 0);
+        createReimbursementTransaction(targetDebt, unpaidSum);
+        setSelectedDebtDetailId(null);
+        return;
+      }
 
-      setDebts((prev) =>
-        prev.map((debt) => {
-          if (debt.id !== debtId) return debt;
-          return {
-            ...debt,
-            installments: debt.installments.map((inst) =>
-              inst.paid
-                ? inst
-                : {
-                    ...inst,
-                    paid: true,
-                    paidAt: todayStr,
-                    paidNote: 'Quitado integralmente',
-                  }
-            ),
-          };
-        })
-      );
-      createReimbursementTransaction(targetDebt, unpaidSum);
-      setSelectedDebtDetailId(null);
-      return;
-    }
-
-    const alreadyPaid = targetDebt.installments.filter((i) => i.paid);
-    const unpaid = targetDebt.installments.filter((i) => !i.paid);
-    const remainingSum = unpaid.reduce((s, i) => s + i.amount, 0);
-    const paidAmount = Number(options.paidAmount.toFixed(2));
-    const remainder = Math.max(0, Number((remainingSum - paidAmount).toFixed(2)));
-
-    if (options.forgiveRemainder) {
-      const partialPaidInst: DebtInstallment = {
-        id: `${targetDebt.id}-inst-paid-${Date.now()}`,
-        installmentNumber: alreadyPaid.length + 1,
-        totalInstallments: alreadyPaid.length + 1,
-        amount: paidAmount,
-        dueDate: todayStr,
-        paid: true,
-        paidAt: todayStr,
-        paidNote: 'Pagamento parcial (restante abonado)',
-      };
-
-      const nextInstallments = [...alreadyPaid, partialPaidInst].map((inst, idx, arr) => ({
-        ...inst,
-        installmentNumber: idx + 1,
-        totalInstallments: arr.length,
-      }));
-
-      setDebts((prev) =>
-        prev.map((debt) => {
-          if (debt.id !== debtId) return debt;
-          return {
-            ...debt,
-            totalInstallments: nextInstallments.length,
-            installments: nextInstallments,
-            forgivenAmount: Number(((debt.forgivenAmount || 0) + remainder).toFixed(2)),
-          };
-        })
-      );
+      const unpaid = targetDebt.installments.filter((i) => !i.paid);
+      const remainingSum = unpaid.reduce((s, i) => s + i.amount, 0);
+      const paidAmount = Number(options.paidAmount.toFixed(2));
+      const remainder = Math.max(0, Number((remainingSum - paidAmount).toFixed(2)));
 
       if (paidAmount > 0) {
         createReimbursementTransaction(targetDebt, paidAmount);
       }
 
-      if (remainder > 0) {
-        const legacyMap: Record<string, CategoryName> = {
-          food: CategoryName.FOOD,
-          trip: CategoryName.TRANSPORTATION,
-          market: CategoryName.GROCERIES,
-          transport: CategoryName.TRANSPORTATION,
-          leisure: CategoryName.ENTERTAINMENT,
-          home: CategoryName.HOUSING,
-          other: CategoryName.OTHER_EXPENSES,
-        };
-        const normalizedCat =
-          (targetDebt.category && legacyMap[targetDebt.category]) ||
-          targetDebt.category ||
-          CategoryName.OTHER_EXPENSES;
-        const catDisplay = getCategoryDisplayName(
-          normalizedCat,
-          t as unknown as Record<string, string>
-        );
-        const validAccountId =
-          targetDebt.accountId && !targetDebt.accountId.startsWith('acc-')
-            ? targetDebt.accountId
-            : undefined;
-
-        addTransaction({
-          description: `Abono de dívida: ${targetDebt.description}`,
-          amount: remainder,
-          type: TransactionType.EXPENSE,
-          category: catDisplay,
-          date: new Date(),
-          accountId: validAccountId,
-          paid: true,
-        }).catch(() => {
-          // Mantém funcionamento local caso backend não esteja ativo
-        });
-      }
-
-      setSelectedDebtDetailId(null);
-    } else {
-      const unpaidCount = Math.max(1, unpaid.length);
-      const totalCount = alreadyPaid.length + 1 + unpaidCount;
-      const partialPaidInst: DebtInstallment = {
-        id: `${targetDebt.id}-inst-paid-${Date.now()}`,
-        installmentNumber: alreadyPaid.length + 1,
-        totalInstallments: totalCount,
-        amount: paidAmount,
-        dueDate: todayStr,
-        paid: true,
-        paidAt: todayStr,
-        paidNote: 'Pagamento parcial',
-      };
-
-      const baseUnpaid = Math.floor((remainder / unpaidCount) * 100) / 100;
-      const updatedUnpaid: DebtInstallment[] = unpaid.map((inst, idx) => {
-        const amt =
-          idx === unpaidCount - 1
-            ? Number((remainder - baseUnpaid * (unpaidCount - 1)).toFixed(2))
-            : baseUnpaid;
-        return {
-          ...inst,
-          installmentNumber: alreadyPaid.length + 2 + idx,
-          totalInstallments: totalCount,
-          amount: amt,
-        };
-      });
-
-      const nextInstallments = [...alreadyPaid, partialPaidInst, ...updatedUnpaid].map(
-        (inst, idx, arr) => ({
-          ...inst,
-          installmentNumber: idx + 1,
-          totalInstallments: arr.length,
-        })
-      );
-
-      setDebts((prev) =>
-        prev.map((debt) => {
-          if (debt.id !== debtId) return debt;
-          return {
-            ...debt,
-            totalInstallments: nextInstallments.length,
-            installments: nextInstallments,
+      if (options.forgiveRemainder) {
+        if (remainder > 0) {
+          const legacyMap: Record<string, CategoryName> = {
+            food: CategoryName.FOOD,
+            trip: CategoryName.TRANSPORTATION,
+            market: CategoryName.GROCERIES,
+            transport: CategoryName.TRANSPORTATION,
+            leisure: CategoryName.ENTERTAINMENT,
+            home: CategoryName.HOUSING,
+            other: CategoryName.OTHER_EXPENSES,
           };
-        })
-      );
+          const normalizedCat =
+            (targetDebt.category && legacyMap[targetDebt.category]) ||
+            targetDebt.category ||
+            CategoryName.OTHER_EXPENSES;
+          const catDisplay = getCategoryDisplayName(
+            normalizedCat,
+            t as unknown as Record<string, string>
+          );
+          const validAccountId =
+            targetDebt.accountId && !targetDebt.accountId.startsWith('acc-')
+              ? targetDebt.accountId
+              : undefined;
+
+          addTransaction({
+            description: `Abono de dívida: ${targetDebt.description}`,
+            amount: remainder,
+            type: TransactionType.EXPENSE,
+            category: catDisplay,
+            date: new Date(),
+            accountId: validAccountId,
+            paid: true,
+          }).catch(() => {});
+        }
+
+        setSelectedDebtDetailId(null);
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao quitar dívida');
     }
   };
 
@@ -1143,7 +803,7 @@ const Loans: React.FC = () => {
       message: `Deseja marcar todas as parcelas pendentes de ${friend?.name || 'este amigo'} vencendo em ${monthLabel} como pagas?`,
       confirmText: 'Sim, quitar mês',
       variant: 'info',
-      onConfirm: () => {
+      onConfirm: async () => {
         const newlySettledDebts = debts.filter((debt) => {
           if (debt.friendId !== friendId || debt.direction !== 'THEY_OWE_ME') return false;
           const wasOpen = debt.installments.some((i) => !i.paid);
@@ -1153,35 +813,18 @@ const Loans: React.FC = () => {
           );
         });
 
-        setDebts((prev) =>
-          prev.map((debt) => {
-            if (debt.friendId !== friendId) return debt;
-            return {
-              ...debt,
-              installments: debt.installments.map((inst) => {
-                if (!inst.paid && isSameMonth(parseISO(inst.dueDate), selectedMonth)) {
-                  return {
-                    ...inst,
-                    paid: true,
-                    paidAt: format(new Date(), 'yyyy-MM-dd'),
-                    paidNote: 'Parcela do mês quitada',
-                  };
-                }
-                return inst;
-              }),
-            };
-          })
-        );
-        settleFriendMonthMutation
-          .mutateAsync({
+        try {
+          await settleFriendMonthMutation.mutateAsync({
             friendId,
             month: format(selectedMonth, 'yyyy-MM'),
-          })
-          .catch(() => {});
+          });
 
-        newlySettledDebts.forEach((debt) => {
-          createReimbursementTransaction(debt, debt.debtTotalAmount);
-        });
+          newlySettledDebts.forEach((debt) => {
+            createReimbursementTransaction(debt, debt.debtTotalAmount);
+          });
+        } catch (err) {
+          showError(err instanceof Error ? err.message : 'Erro ao quitar parcelas do mês');
+        }
       },
     });
   };
@@ -1193,10 +836,13 @@ const Loans: React.FC = () => {
       message: `Tem certeza que deseja excluir permanentemente o registro "${target?.description || ''}"?`,
       confirmText: 'Excluir registro',
       variant: 'danger',
-      onConfirm: () => {
-        setDebts((prev) => prev.filter((d) => d.id !== debtId));
-        deleteDebtMutation.mutateAsync(debtId).catch(() => {});
-        setSelectedDebtDetailId(null);
+      onConfirm: async () => {
+        try {
+          await deleteDebtMutation.mutateAsync(debtId);
+          setSelectedDebtDetailId(null);
+        } catch (err) {
+          showError(err instanceof Error ? err.message : 'Erro ao excluir dívida');
+        }
       },
     });
   };
@@ -1397,58 +1043,30 @@ const Loans: React.FC = () => {
     return userAccounts[0]?.name || 'Conta Principal';
   };
 
-  const handleCreateDebt = (e: React.FormEvent) => {
+  const handleCreateDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     const numericTotal = totalAmountMask.numericValue;
     if (!debtDesc.trim() || numericTotal <= 0 || !isStep3Valid) return;
 
     const count = Math.max(1, parseInt(debtInstallmentsCount, 10) || 1);
-    const baseDate = new Date();
     const chosenAccountId = debtAccountId || userAccounts[0]?.id || '';
     const chosenAccountName = accountMap.get(chosenAccountId) || userAccounts[0]?.name || '';
 
     const targetMemberIds = selectedMemberIds;
     if (targetMemberIds.length === 0) return;
 
-    if (debtDirection === 'THEY_OWE_ME') {
-      const createdDebts: SplitDebt[] = targetMemberIds
-        .filter((mId) => (participantShares[mId] || 0) > 0)
-        .map((mId, index) => {
-          const perPersonTotal = participantShares[mId] || 0;
-          const perInstallment = Number((perPersonTotal / count).toFixed(2));
-          const dId = `d-${Date.now()}-${index}`;
-          const installments: DebtInstallment[] = Array.from({ length: count }, (_, idx) => ({
-            id: `${dId}-inst-${idx + 1}`,
-            installmentNumber: idx + 1,
-            totalInstallments: count,
-            amount: perInstallment,
-            dueDate: format(addMonths(baseDate, idx), 'yyyy-MM-dd'),
-            paid: false,
-          }));
-
-          return {
-            id: dId,
-            description: debtDesc.trim(),
-            category: debtCategory,
-            accountId: chosenAccountId,
-            accountName: chosenAccountName,
-            originalTotalAmount: numericTotal,
-            debtTotalAmount: perPersonTotal,
-            direction: 'THEY_OWE_ME',
-            splitRule: debtSplitRule,
+    try {
+      if (debtDirection === 'THEY_OWE_ME') {
+        const shares = targetMemberIds
+          .map((mId) => ({
             friendId: mId,
-            groupId: debtGroupId || undefined,
-            createdAt: format(baseDate, 'yyyy-MM-dd'),
-            totalInstallments: count,
-            installments,
-          };
-        });
+            debtTotalAmount: Number((participantShares[mId] || 0).toFixed(2)),
+          }))
+          .filter((s) => s.debtTotalAmount > 0);
 
-      setDebts((prev) => [...createdDebts, ...prev]);
-      if (createdDebts[0]) setExpandedDebtId(createdDebts[0].id);
+        if (shares.length === 0) return;
 
-      createDebtsMutation
-        .mutateAsync({
+        const created = await createDebtsMutation.mutateAsync({
           householdId: householdId || undefined,
           description: debtDesc.trim(),
           category: debtCategory,
@@ -1459,53 +1077,18 @@ const Loans: React.FC = () => {
           splitRule: debtSplitRule,
           groupId: debtGroupId || undefined,
           totalInstallments: count,
-          shares: createdDebts.map((d) => ({
-            friendId: d.friendId,
-            debtTotalAmount: d.debtTotalAmount,
-          })),
-        })
-        .catch(() => {});
-    } else {
-      const payerFriendId =
-        debtPayerFriendId && targetMemberIds.includes(debtPayerFriendId)
-          ? debtPayerFriendId
-          : targetMemberIds[0];
-      const myDebtTotal = participantShares['me'] || 0;
-      if (!payerFriendId || myDebtTotal <= 0) return;
+          shares,
+        });
+        if (created?.[0]?.id) setExpandedDebtId(created[0].id);
+      } else {
+        const payerFriendId =
+          debtPayerFriendId && targetMemberIds.includes(debtPayerFriendId)
+            ? debtPayerFriendId
+            : targetMemberIds[0];
+        const myDebtTotal = participantShares['me'] || 0;
+        if (!payerFriendId || myDebtTotal <= 0) return;
 
-      const perInstallment = Number((myDebtTotal / count).toFixed(2));
-      const dId = `d-${Date.now()}`;
-      const installments: DebtInstallment[] = Array.from({ length: count }, (_, idx) => ({
-        id: `${dId}-inst-${idx + 1}`,
-        installmentNumber: idx + 1,
-        totalInstallments: count,
-        amount: perInstallment,
-        dueDate: format(addMonths(baseDate, idx), 'yyyy-MM-dd'),
-        paid: false,
-      }));
-
-      const newDebt: SplitDebt = {
-        id: dId,
-        description: debtDesc.trim(),
-        category: debtCategory,
-        accountId: chosenAccountId,
-        accountName: chosenAccountName,
-        originalTotalAmount: numericTotal,
-        debtTotalAmount: myDebtTotal,
-        direction: 'I_OWE_THEM',
-        splitRule: debtSplitRule,
-        friendId: payerFriendId,
-        groupId: debtGroupId || undefined,
-        createdAt: format(baseDate, 'yyyy-MM-dd'),
-        totalInstallments: count,
-        installments,
-      };
-
-      setDebts((prev) => [newDebt, ...prev]);
-      setExpandedDebtId(newDebt.id);
-
-      createDebtsMutation
-        .mutateAsync({
+        const created = await createDebtsMutation.mutateAsync({
           householdId: householdId || undefined,
           description: debtDesc.trim(),
           category: debtCategory,
@@ -1520,189 +1103,92 @@ const Loans: React.FC = () => {
           shares: [
             {
               friendId: payerFriendId,
-              debtTotalAmount: myDebtTotal,
+              debtTotalAmount: Number(myDebtTotal.toFixed(2)),
             },
           ],
-        })
-        .catch(() => {});
-    }
+        });
+        if (created?.[0]?.id) setExpandedDebtId(created[0].id);
+      }
 
-    // Reset form
-    setDebtDesc('');
-    totalAmountMask.setValue('');
-    setDebtInstallmentsCount('1');
-    setAddDebtStep(1);
-    setIsAddDebtOpen(false);
+      // Reset form
+      setDebtDesc('');
+      totalAmountMask.setValue('');
+      setDebtInstallmentsCount('1');
+      setAddDebtStep(1);
+      setIsAddDebtOpen(false);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao criar despesa dividida');
+    }
   };
 
-  const handleImportLegacyDebts = (
+  const handleImportLegacyDebts = async (
     items: LegacyImportItem[],
     deleteOriginals: boolean,
     hideToolAfter: boolean
   ) => {
-    const createdDebts: SplitDebt[] = items.map((item, idx) => {
-      const dId = `d-legacy-${Date.now()}-${idx}`;
-      const paidAmt =
-        item.paid && item.paidAmount !== undefined ? item.paidAmount : item.amount;
-      const isPartial = item.paid && paidAmt < item.amount - 0.01;
-      const remainder = isPartial
-        ? Number((item.amount - paidAmt).toFixed(2))
-        : 0;
-
-      const paidInstallmentsFromReimbs: DebtInstallment[] =
-        item.reimbursements && item.reimbursements.length > 0
-          ? item.reimbursements.map((r, rIdx) => ({
-              id: `${dId}-inst-paid-${rIdx + 1}`,
-              installmentNumber: rIdx + 1,
-              totalInstallments: 1,
-              amount: r.amount,
-              dueDate: item.date,
-              paid: true,
-              paidAt: r.date,
-              paidNote: r.description,
-            }))
-          : [
-              {
-                id: `${dId}-inst-paid-1`,
-                installmentNumber: 1,
-                totalInstallments: 1,
-                amount: paidAmt,
-                dueDate: item.date,
-                paid: true,
-                paidAt: item.paidAt || item.date,
-                paidNote: 'Reembolso importado',
-              },
-            ];
-
-      if (isPartial && item.forgiveRemainder) {
-        // Reembolso parcial com abono do restante (vira despesa na conta na data original)
-        const catDisplay = getCategoryDisplayName(
-          CategoryName.OTHER_EXPENSES,
-          t as unknown as Record<string, string>
-        );
-        const validAccountId =
-          item.accountId && !item.accountId.startsWith('acc-')
-            ? item.accountId
-            : undefined;
-        const expenseDate = new Date(`${item.paidAt || item.date}T12:00:00`);
-
-        addTransaction({
-          description: `Abono de dívida: ${item.description}`,
-          amount: remainder,
-          type: TransactionType.EXPENSE,
-          category: catDisplay,
-          date: !isNaN(expenseDate.getTime()) ? expenseDate : new Date(),
-          accountId: validAccountId,
-          paid: true,
-        }).catch(() => {});
-
-        return {
-          id: dId,
-          description: item.description,
-          category: CategoryName.DEBTS,
-          accountId: item.accountId,
-          accountName: item.accountName,
-          originalTotalAmount: item.amount,
-          debtTotalAmount: item.amount,
-          direction: 'THEY_OWE_ME',
-          splitRule: 'FULL_AMOUNT',
-          friendId: item.friendId,
-          createdAt: item.date,
-          totalInstallments: 1,
-          forgivenAmount: remainder,
-          installments: paidInstallmentsFromReimbs,
-        };
-      }
-
-      if (isPartial && !item.forgiveRemainder) {
-        // Reembolso parcial mantendo o restante da dívida em aberto
-        return {
-          id: dId,
-          description: item.description,
-          category: CategoryName.DEBTS,
-          accountId: item.accountId,
-          accountName: item.accountName,
-          originalTotalAmount: item.amount,
-          debtTotalAmount: item.amount,
-          direction: 'THEY_OWE_ME',
-          splitRule: 'FULL_AMOUNT',
-          friendId: item.friendId,
-          createdAt: item.date,
-          totalInstallments: 1,
-          installments: [
-            ...paidInstallmentsFromReimbs,
-            {
-              id: `${dId}-inst-open`,
-              installmentNumber: paidInstallmentsFromReimbs.length + 1,
-              totalInstallments: 1,
-              amount: remainder,
-              dueDate: item.date,
-              paid: false,
-            },
-          ],
-        };
-      }
-
-      return {
-        id: dId,
-        description: item.description,
-        category: CategoryName.DEBTS,
-        accountId: item.accountId,
-        accountName: item.accountName,
-        originalTotalAmount: item.amount,
-        debtTotalAmount: item.amount,
-        direction: 'THEY_OWE_ME',
-        splitRule: 'FULL_AMOUNT',
-        friendId: item.friendId,
-        createdAt: item.date,
-        totalInstallments: 1,
-        installments: item.paid
-          ? paidInstallmentsFromReimbs
-          : [
-              {
-                id: `${dId}-inst-1`,
-                installmentNumber: 1,
-                totalInstallments: 1,
-                amount: item.amount,
-                dueDate: item.date,
-                paid: false,
-              },
-            ],
-      };
-    });
-
-    setDebts((prev) => [...createdDebts, ...prev]);
-
-    const newImportedIds = items.flatMap((i) =>
-      i.reimbursementTransactionIds && i.reimbursementTransactionIds.length > 0
-        ? [i.transactionId, ...i.reimbursementTransactionIds]
-        : i.reimbursementTransactionId
-        ? [i.transactionId, i.reimbursementTransactionId]
-        : [i.transactionId]
-    );
-    const updatedImportedIds = Array.from(new Set([...importedTxIds, ...newImportedIds]));
-    setImportedTxIds(updatedImportedIds);
-    localStorage.setItem(STORAGE_KEYS.IMPORTED_TX_IDS, JSON.stringify(updatedImportedIds));
-
-    if (hideToolAfter) {
-      setIsLegacyToolHidden(true);
-      localStorage.setItem(STORAGE_KEYS.HIDE_LEGACY_TOOL, 'true');
-    }
-
-    importLegacyMutation
-      .mutateAsync({
+    try {
+      await importLegacyMutation.mutateAsync({
         householdId: householdId || undefined,
         items,
         deleteOriginalTransactions: deleteOriginals,
-      })
-      .catch(() => {});
+      });
 
-    if (deleteOriginals) {
-      newImportedIds.forEach((txId) => {
-        if (!txId.startsWith('legacy-')) {
-          deleteTransaction(txId).catch(() => {});
+      items.forEach((item) => {
+        const paidAmt =
+          item.paid && item.paidAmount !== undefined ? item.paidAmount : item.amount;
+        const isPartial = item.paid && paidAmt < item.amount - 0.01;
+        const remainder = isPartial
+          ? Number((item.amount - paidAmt).toFixed(2))
+          : 0;
+
+        if (isPartial && item.forgiveRemainder && remainder > 0) {
+          const catDisplay = getCategoryDisplayName(
+            CategoryName.OTHER_EXPENSES,
+            t as unknown as Record<string, string>
+          );
+          const validAccountId =
+            item.accountId && !item.accountId.startsWith('acc-')
+              ? item.accountId
+              : undefined;
+          const expenseDate = new Date(`${item.paidAt || item.date}T12:00:00`);
+
+          addTransaction({
+            description: `Abono de dívida: ${item.description}`,
+            amount: remainder,
+            type: TransactionType.EXPENSE,
+            category: catDisplay,
+            date: !isNaN(expenseDate.getTime()) ? expenseDate : new Date(),
+            accountId: validAccountId,
+            paid: true,
+          }).catch(() => {});
         }
       });
+
+      const newImportedIds = items.flatMap((i) =>
+        i.reimbursementTransactionIds && i.reimbursementTransactionIds.length > 0
+          ? [i.transactionId, ...i.reimbursementTransactionIds]
+          : i.reimbursementTransactionId
+          ? [i.transactionId, i.reimbursementTransactionId]
+          : [i.transactionId]
+      );
+      const updatedImportedIds = Array.from(new Set([...importedTxIds, ...newImportedIds]));
+      setImportedTxIds(updatedImportedIds);
+      localStorage.setItem(STORAGE_KEYS.IMPORTED_TX_IDS, JSON.stringify(updatedImportedIds));
+
+      if (hideToolAfter) {
+        setIsLegacyToolHidden(true);
+        localStorage.setItem(STORAGE_KEYS.HIDE_LEGACY_TOOL, 'true');
+      }
+
+      if (deleteOriginals) {
+        newImportedIds.forEach((txId) => {
+          if (!txId.startsWith('legacy-')) {
+            deleteTransaction(txId).catch(() => {});
+          }
+        });
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao converter transações antigas');
     }
   };
 
