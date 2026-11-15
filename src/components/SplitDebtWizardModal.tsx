@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import SplitDebtModal from './SplitDebtModal';
+import SplitDebtModal, { computeEqualizedDistribution } from './SplitDebtModal';
+import SplitContactModal from './SplitContactModal';
 import { useCurrency } from '../context/CurrencyContext';
 import { useToastContext } from '../context/ToastContext';
 import { useTransactions } from '../context/TransactionsContext';
@@ -10,6 +11,8 @@ import {
   useSplitFriends,
   useSplitGroups,
   useCreateSplitDebts,
+  useCreateSplitFriend,
+  useSettleSplitDebt,
 } from '../hooks/api/useSplitwise';
 import { CategoryName, TransactionType } from '../lib/enums';
 import type { Friend, SplitGroup, SplitDirection, SplitRule } from '../pages/Loans';
@@ -44,6 +47,8 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
   const { data: backendFriends } = useSplitFriends(householdId || undefined);
   const { data: backendGroups } = useSplitGroups(householdId || undefined);
   const createDebtsMutation = useCreateSplitDebts();
+  const createFriendMutation = useCreateSplitFriend();
+  const settleDebtMutation = useSettleSplitDebt();
 
   const userAccounts = useMemo(() => {
     const raw = regularAccountsData?.accounts?.length
@@ -93,7 +98,38 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
   const [equalIncludedIds, setEqualIncludedIds] = useState<string[]>([]);
   const [percentageByParticipant, setPercentageByParticipant] = useState<Record<string, string>>({});
   const [amountByParticipant, setAmountByParticipant] = useState<Record<string, string>>({});
+  const [debtAlreadyPaid, setDebtAlreadyPaid] = useState(false);
   const [isSubmittingDebt, setIsSubmittingDebt] = useState(false);
+
+  const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
+  const [newFriendName, setNewFriendName] = useState('');
+  const [newFriendContact, setNewFriendContact] = useState('');
+  const [newFriendPhoto, setNewFriendPhoto] = useState('');
+
+  const handleQuickAddFriend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFriendName.trim() || createFriendMutation.isPending) return;
+    try {
+      const created = await createFriendMutation.mutateAsync({
+        householdId: householdId || undefined,
+        name: newFriendName.trim(),
+        emailOrPix: newFriendContact.trim() || undefined,
+        photoUrl: newFriendPhoto || undefined,
+      });
+      if (created?.id) {
+        setSelectedMemberIds((prev) =>
+          prev.includes(created.id) ? prev : [...prev, created.id]
+        );
+      }
+      setNewFriendName('');
+      setNewFriendContact('');
+      setNewFriendPhoto('');
+      setIsAddFriendOpen(false);
+      showSuccess('Amigo adicionado!');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao criar amigo');
+    }
+  };
 
   const resolveInitialAccountId = () => {
     if (defaultAccountId && userAccounts.some((a) => a.id === defaultAccountId)) {
@@ -125,6 +161,7 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
     setEqualIncludedIds([]);
     setPercentageByParticipant({});
     setAmountByParticipant({});
+    setDebtAlreadyPaid(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultAccountId]);
 
@@ -369,8 +406,9 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
           householdId: householdId || undefined,
           description: debtDesc.trim(),
           category: debtCategory,
-          accountId: chosenAccountId,
-          accountName: chosenAccountName,
+          ...(debtAlreadyPaid
+            ? { accountId: chosenAccountId, accountName: chosenAccountName }
+            : {}),
           originalTotalAmount: numericTotal,
           direction: 'I_OWE_THEM',
           payerFriendId,
@@ -384,7 +422,21 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
             },
           ],
         });
-        if (created?.[0]?.id) onCreated?.(created[0].id);
+        if (created?.[0]?.id) {
+          onCreated?.(created[0].id);
+          if (debtAlreadyPaid) {
+            try {
+              await settleDebtMutation.mutateAsync({
+                debtId: created[0].id,
+                mode: 'full',
+                paidAmount: Number(myDebtTotal.toFixed(2)),
+                forgiveRemainder: false,
+              });
+            } catch {
+              // Mantém criação mesmo se quitação automática falhar
+            }
+          }
+        }
 
         const myTxPayload: Parameters<typeof addTransaction>[0] = {
           description: debtDesc.trim(),
@@ -392,8 +444,8 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
           type: TransactionType.EXPENSE,
           category: debtCategory,
           date: new Date(),
-          accountId: validAccountId,
-          paid: count === 1,
+          accountId: debtAlreadyPaid ? validAccountId : undefined,
+          paid: debtAlreadyPaid,
         };
         try {
           if (count > 1) {
@@ -411,6 +463,7 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
       setDebtInstallmentsCount('1');
       setPercentageByParticipant({});
       setAmountByParticipant({});
+      setDebtAlreadyPaid(false);
       setStep(1);
       if (shouldCreateNew) {
         showSuccess('Dívida criada com sucesso!');
@@ -426,7 +479,8 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
   };
 
   return (
-    <SplitDebtModal
+    <>
+      <SplitDebtModal
       isOpen={isOpen}
       onClose={onClose}
       step={step}
@@ -552,7 +606,77 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
         void handleCreateDebt(undefined, true);
       }}
       onSwitchToTransaction={onSwitchToTransaction}
+      onEqualizeSmallest={() => {
+        if (debtSplitRule === 'PERCENTAGE') {
+          const currentNums: Record<string, number> = {};
+          splitParticipants.forEach((id) => {
+            currentNums[id] =
+              parseFloat((percentageByParticipant[id] || '0').replace(',', '.')) || 0;
+          });
+          const next = computeEqualizedDistribution(splitParticipants, currentNums, 100);
+          const nextStr: Record<string, string> = {};
+          splitParticipants.forEach((id) => {
+            nextStr[id] = String(next[id] ?? 0);
+          });
+          setPercentageByParticipant(nextStr);
+        } else if (debtSplitRule === 'UNEQUAL') {
+          const currentNums: Record<string, number> = {};
+          splitParticipants.forEach((id) => {
+            currentNums[id] =
+              parseFloat(
+                (amountByParticipant[id] || '0').replace(/\./g, '').replace(',', '.')
+              ) || 0;
+          });
+          const next = computeEqualizedDistribution(
+            splitParticipants,
+            currentNums,
+            totalAmountMask.numericValue
+          );
+          const nextStr: Record<string, string> = {};
+          splitParticipants.forEach((id) => {
+            nextStr[id] = (next[id] ?? 0).toFixed(2).replace('.', ',');
+          });
+          setAmountByParticipant(nextStr);
+        }
+      }}
+      onCreateFriendClick={() => setIsAddFriendOpen(true)}
+      debtAlreadyPaid={debtAlreadyPaid}
+      onAlreadyPaidChange={setDebtAlreadyPaid}
     />
+
+      <SplitContactModal
+        isOpen={isAddFriendOpen}
+        onClose={() => setIsAddFriendOpen(false)}
+        activeTab="friend"
+        onTabChange={() => {}}
+        friends={activeFriends}
+        newFriendName={newFriendName}
+        onFriendNameChange={setNewFriendName}
+        newFriendContact={newFriendContact}
+        onFriendContactChange={setNewFriendContact}
+        newFriendPhoto={newFriendPhoto}
+        onFriendPhotoChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') setNewFriendPhoto(reader.result);
+          };
+          reader.readAsDataURL(file);
+        }}
+        onRemoveFriendPhoto={() => setNewFriendPhoto('')}
+        onAddFriend={handleQuickAddFriend}
+        newGroupName=""
+        onGroupNameChange={() => {}}
+        newGroupMembers={[]}
+        onToggleGroupMember={() => {}}
+        newGroupPhoto=""
+        onGroupPhotoChange={() => {}}
+        onRemoveGroupPhoto={() => {}}
+        onAddGroup={(e) => e.preventDefault()}
+        isSubmitting={createFriendMutation.isPending}
+      />
+    </>
   );
 };
 

@@ -56,7 +56,7 @@ const SplitContactModal: React.FC<SplitContactModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto">
+    <div className="fixed inset-0 z-[70] overflow-y-auto">
       <div
         className="fixed inset-0 bg-black/40 animate-fade-in transition-opacity duration-300 ease-out"
         onClick={onClose}

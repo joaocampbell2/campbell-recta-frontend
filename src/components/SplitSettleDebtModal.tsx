@@ -2,18 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useCurrencyMask } from '../hooks/useCurrencyMask';
 import { formatCurrency } from '../utils/format';
+import SelectCombobox from './SelectCombobox';
 import type { SplitDebt } from '../pages/Loans';
 
 export interface SettleDebtOptions {
   mode: 'full' | 'partial';
   paidAmount: number;
   forgiveRemainder: boolean;
+  accountId?: string;
 }
 
 interface SplitSettleDebtModalProps {
   debt: SplitDebt | null;
   accountName: string;
   reimbursementAccountName?: string;
+  accounts?: Array<{ id: string; name: string }>;
   baseCurrency: string;
   onClose: () => void;
   onConfirm: (debtId: string, options: SettleDebtOptions) => void;
@@ -23,18 +26,21 @@ const SplitSettleDebtModal: React.FC<SplitSettleDebtModalProps> = ({
   debt,
   accountName,
   reimbursementAccountName,
+  accounts = [],
   baseCurrency,
   onClose,
   onConfirm,
 }) => {
   const [mode, setMode] = useState<'full' | 'partial'>('full');
   const [forgiveRemainder, setForgiveRemainder] = useState<boolean>(false);
+  const [paymentAccountId, setPaymentAccountId] = useState<string>('');
   const partialAmountMask = useCurrencyMask();
 
   useEffect(() => {
     if (debt) {
       setMode('full');
       setForgiveRemainder(false);
+      setPaymentAccountId(accounts[0]?.id || '');
       partialAmountMask.setValue('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,6 +71,9 @@ const SplitSettleDebtModal: React.FC<SplitSettleDebtModalProps> = ({
         mode: 'full',
         paidAmount: remainingSum,
         forgiveRemainder: false,
+        ...(debt.direction === 'I_OWE_THEM' && paymentAccountId
+          ? { accountId: paymentAccountId }
+          : {}),
       });
       onClose();
       return;
@@ -76,6 +85,9 @@ const SplitSettleDebtModal: React.FC<SplitSettleDebtModalProps> = ({
       mode: 'partial',
       paidAmount: paidNumeric,
       forgiveRemainder,
+      ...(debt.direction === 'I_OWE_THEM' && paymentAccountId
+        ? { accountId: paymentAccountId }
+        : {}),
     });
     onClose();
   };
@@ -219,6 +231,23 @@ const SplitSettleDebtModal: React.FC<SplitSettleDebtModalProps> = ({
                   </p>
                 </div>
               </>
+            )}
+
+            {debt.direction === 'I_OWE_THEM' && accounts.length > 0 && (
+              <div>
+                <label className="block text-xs font-light text-gray-500 dark:text-gray-400 mb-1.5">
+                  Conta de pagamento
+                </label>
+                <SelectCombobox
+                  value={paymentAccountId || accounts[0]?.id || ''}
+                  onValueChange={setPaymentAccountId}
+                  options={accounts.map((acc) => ({
+                    value: acc.id,
+                    label: acc.name,
+                  }))}
+                  placeholder="Selecione a conta"
+                />
+              </div>
             )}
 
             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100 dark:border-gray-800">

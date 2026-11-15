@@ -65,7 +65,7 @@ import { formatCurrency } from '../utils/format';
 import { PageHeader } from '../components/PageHeader';
 import { PageButton } from '../components/PageButton';
 import SplitContactModal from '../components/SplitContactModal';
-import SplitDebtModal from '../components/SplitDebtModal';
+import SplitDebtModal, { computeEqualizedDistribution } from '../components/SplitDebtModal';
 import SplitDebtDetailModal from '../components/SplitDebtDetailModal';
 import SplitSettleDebtModal, {
   type SettleDebtOptions,
@@ -350,6 +350,7 @@ const Loans: React.FC = () => {
   const [equalIncludedIds, setEqualIncludedIds] = useState<string[]>([]);
   const [percentageByParticipant, setPercentageByParticipant] = useState<Record<string, string>>({});
   const [amountByParticipant, setAmountByParticipant] = useState<Record<string, string>>({});
+  const [debtAlreadyPaid, setDebtAlreadyPaid] = useState(false);
 
   // Helper maps
   const friendMap = useMemo(() => {
@@ -741,7 +742,23 @@ const Loans: React.FC = () => {
           .filter((i) => !i.paid)
           .reduce((s, i) => s + i.amount, 0);
 
-        createReimbursementTransaction(targetDebt, unpaidSum);
+        if (targetDebt.direction === 'THEY_OWE_ME') {
+          createReimbursementTransaction(targetDebt, unpaidSum);
+        } else if (unpaidSum > 0 && options.accountId) {
+          const validAccountId = !options.accountId.startsWith('acc-')
+            ? options.accountId
+            : undefined;
+          const friend = friendMap.get(targetDebt.friendId);
+          addTransaction({
+            description: `Pagamento: ${targetDebt.description}${friend ? ` (${friend.name})` : ''}`,
+            amount: Number(unpaidSum.toFixed(2)),
+            type: TransactionType.EXPENSE,
+            category: targetDebt.category || CategoryName.OTHER_EXPENSES,
+            date: new Date(),
+            accountId: validAccountId,
+            paid: true,
+          }).catch(() => {});
+        }
         setSelectedDebtDetailId(null);
         return;
       }
@@ -752,7 +769,23 @@ const Loans: React.FC = () => {
       const remainder = Math.max(0, Number((remainingSum - paidAmount).toFixed(2)));
 
       if (paidAmount > 0) {
-        createReimbursementTransaction(targetDebt, paidAmount);
+        if (targetDebt.direction === 'THEY_OWE_ME') {
+          createReimbursementTransaction(targetDebt, paidAmount);
+        } else if (options.accountId) {
+          const validAccountId = !options.accountId.startsWith('acc-')
+            ? options.accountId
+            : undefined;
+          const friend = friendMap.get(targetDebt.friendId);
+          addTransaction({
+            description: `Pagamento: ${targetDebt.description}${friend ? ` (${friend.name})` : ''}`,
+            amount: paidAmount,
+            type: TransactionType.EXPENSE,
+            category: targetDebt.category || CategoryName.OTHER_EXPENSES,
+            date: new Date(),
+            accountId: validAccountId,
+            paid: true,
+          }).catch(() => {});
+        }
       }
 
       if (options.forgiveRemainder) {
@@ -915,6 +948,7 @@ const Loans: React.FC = () => {
     setEqualIncludedIds([]);
     setPercentageByParticipant({});
     setAmountByParticipant({});
+    setDebtAlreadyPaid(false);
     setIsAddDebtOpen(true);
   };
 
@@ -1168,8 +1202,9 @@ const Loans: React.FC = () => {
           householdId: householdId || undefined,
           description: debtDesc.trim(),
           category: debtCategory,
-          accountId: chosenAccountId,
-          accountName: chosenAccountName,
+          ...(debtAlreadyPaid
+            ? { accountId: chosenAccountId, accountName: chosenAccountName }
+            : {}),
           originalTotalAmount: numericTotal,
           direction: 'I_OWE_THEM',
           payerFriendId,
@@ -1183,9 +1218,23 @@ const Loans: React.FC = () => {
             },
           ],
         });
-        if (created?.[0]?.id) setExpandedDebtId(created[0].id);
+        if (created?.[0]?.id) {
+          setExpandedDebtId(created[0].id);
+          if (debtAlreadyPaid) {
+            try {
+              await settleDebtMutation.mutateAsync({
+                debtId: created[0].id,
+                mode: 'full',
+                paidAmount: Number(myDebtTotal.toFixed(2)),
+                forgiveRemainder: false,
+              });
+            } catch {
+              // Mantém criação mesmo se quitação automática falhar
+            }
+          }
+        }
 
-        // Cria a transação da minha parte na categoria escolhida (parcelada se count > 1)
+        // Cria a transação da minha parte na categoria escolhida
         const validAccountId =
           chosenAccountId && !chosenAccountId.startsWith('acc-') ? chosenAccountId : undefined;
         const myTxPayload: Parameters<typeof addTransaction>[0] = {
@@ -1194,8 +1243,8 @@ const Loans: React.FC = () => {
           type: TransactionType.EXPENSE,
           category: debtCategory,
           date: new Date(),
-          accountId: validAccountId,
-          paid: count === 1,
+          accountId: debtAlreadyPaid ? validAccountId : undefined,
+          paid: debtAlreadyPaid,
         };
         try {
           if (count > 1) {
@@ -1214,6 +1263,7 @@ const Loans: React.FC = () => {
       setDebtInstallmentsCount('1');
       setPercentageByParticipant({});
       setAmountByParticipant({});
+      setDebtAlreadyPaid(false);
       setAddDebtStep(1);
       if (shouldCreateNew) {
         showSuccess('Dívida criada com sucesso!');
@@ -2573,6 +2623,42 @@ const Loans: React.FC = () => {
         onSaveAndCreateNew={() => {
           void handleCreateDebt(undefined, true);
         }}
+        onEqualizeSmallest={() => {
+          if (debtSplitRule === 'PERCENTAGE') {
+            const currentNums: Record<string, number> = {};
+            splitParticipants.forEach((id) => {
+              currentNums[id] =
+                parseFloat((percentageByParticipant[id] || '0').replace(',', '.')) || 0;
+            });
+            const next = computeEqualizedDistribution(splitParticipants, currentNums, 100);
+            const nextStr: Record<string, string> = {};
+            splitParticipants.forEach((id) => {
+              nextStr[id] = String(next[id] ?? 0);
+            });
+            setPercentageByParticipant(nextStr);
+          } else if (debtSplitRule === 'UNEQUAL') {
+            const currentNums: Record<string, number> = {};
+            splitParticipants.forEach((id) => {
+              currentNums[id] =
+                parseFloat(
+                  (amountByParticipant[id] || '0').replace(/\./g, '').replace(',', '.')
+                ) || 0;
+            });
+            const next = computeEqualizedDistribution(
+              splitParticipants,
+              currentNums,
+              totalAmountMask.numericValue
+            );
+            const nextStr: Record<string, string> = {};
+            splitParticipants.forEach((id) => {
+              nextStr[id] = (next[id] ?? 0).toFixed(2).replace('.', ',');
+            });
+            setAmountByParticipant(nextStr);
+          }
+        }}
+        onCreateFriendClick={() => openContactModal('friend')}
+        debtAlreadyPaid={debtAlreadyPaid}
+        onAlreadyPaidChange={setDebtAlreadyPaid}
       />
 
       <SplitDebtDetailModal
@@ -2609,6 +2695,7 @@ const Loans: React.FC = () => {
         debt={settleModalDebt}
         accountName={settleModalDebt ? getDebtAccountName(settleModalDebt) : ''}
         reimbursementAccountName={defaultReimbursementAccountName}
+        accounts={userAccounts}
         baseCurrency={baseCurrency}
         onClose={() => setSettleModalDebtId(null)}
         onConfirm={handleConfirmSettleDebt}

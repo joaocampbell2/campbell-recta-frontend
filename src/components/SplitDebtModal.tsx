@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Search, Check } from 'lucide-react';
+import { X, Search, Check, UserPlus } from 'lucide-react';
 import CategoryCombobox from './CategoryCombobox';
 import SelectCombobox from './SelectCombobox';
 import { TransactionType } from '../lib/enums';
@@ -61,6 +61,66 @@ interface SplitDebtModalProps {
   onSubmit: (e: React.FormEvent) => void;
   onSaveAndCreateNew?: () => void;
   onSwitchToTransaction?: () => void;
+  onEqualizeSmallest?: () => void;
+  onCreateFriendClick?: () => void;
+  debtAlreadyPaid?: boolean;
+  onAlreadyPaidChange?: (paid: boolean) => void;
+}
+
+export function computeEqualizedDistribution(
+  participants: string[],
+  currentValues: Record<string, number>,
+  targetTotal: number
+): Record<string, number> {
+  const result: Record<string, number> = { ...currentValues };
+  if (participants.length === 0) return result;
+
+  const vals = participants.map((id) => currentValues[id] || 0);
+  const minVal = Math.min(...vals);
+  const maxVal = Math.max(...vals);
+
+  const distributeEqually = (ids: string[], totalToDistribute: number) => {
+    if (ids.length === 0) return;
+    const base = Math.floor((totalToDistribute / ids.length) * 100) / 100;
+    const remainderTargetId = ids.includes('me') ? 'me' : ids[0];
+    ids.forEach((id) => {
+      result[id] =
+        id === remainderTargetId
+          ? Number((totalToDistribute - base * (ids.length - 1)).toFixed(2))
+          : base;
+    });
+  };
+
+  if (Math.abs(maxVal - minVal) < 0.005) {
+    distributeEqually(participants, targetTotal);
+    return result;
+  }
+
+  let targetIds = participants.filter((id) => Math.abs((currentValues[id] || 0) - minVal) < 0.005);
+  const fixedSum = participants
+    .filter((id) => !targetIds.includes(id))
+    .reduce((acc, id) => acc + (currentValues[id] || 0), 0);
+  let remaining = Number((targetTotal - fixedSum).toFixed(2));
+
+  if (remaining < 0) {
+    const nonMaxIds = participants.filter(
+      (id) => Math.abs((currentValues[id] || 0) - maxVal) >= 0.005
+    );
+    const maxSum = participants
+      .filter((id) => !nonMaxIds.includes(id))
+      .reduce((acc, id) => acc + (currentValues[id] || 0), 0);
+    const remAfterMax = Number((targetTotal - maxSum).toFixed(2));
+    if (nonMaxIds.length > 0 && remAfterMax >= 0) {
+      targetIds = nonMaxIds;
+      remaining = remAfterMax;
+    } else {
+      distributeEqually(participants, targetTotal);
+      return result;
+    }
+  }
+
+  distributeEqually(targetIds, remaining);
+  return result;
 }
 
 const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
@@ -115,6 +175,10 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
   onSubmit,
   onSaveAndCreateNew,
   onSwitchToTransaction,
+  onEqualizeSmallest,
+  onCreateFriendClick,
+  debtAlreadyPaid = false,
+  onAlreadyPaidChange,
 }) => {
   if (!isOpen) return null;
 
@@ -187,6 +251,19 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                     Amigos
                   </label>
                   <div className="flex items-center gap-2 text-xs">
+                    {onCreateFriendClick && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={onCreateFriendClick}
+                          className="inline-flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:opacity-70 font-medium"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          Novo amigo
+                        </button>
+                        <span className="text-gray-300 dark:text-gray-700">|</span>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={onSelectAllAvailable}
@@ -218,9 +295,21 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
 
                 <div className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-md max-h-60 overflow-y-auto">
                   {availableMembersForSplit.length === 0 ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4 font-light">
-                      Nenhum resultado
-                    </p>
+                    <div className="text-center py-4 space-y-2">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 font-light">
+                        Nenhum resultado
+                      </p>
+                      {onCreateFriendClick && (
+                        <button
+                          type="button"
+                          onClick={onCreateFriendClick}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 hover:opacity-75"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          Criar novo amigo
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     availableMembersForSplit.map((friend) => {
                       const isSelected = selectedMemberIds.includes(friend.id);
@@ -392,7 +481,13 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div
+                className={
+                  debtDirection === 'THEY_OWE_ME' || debtAlreadyPaid
+                    ? 'grid grid-cols-2 gap-3'
+                    : ''
+                }
+              >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Categoria
@@ -405,21 +500,40 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Conta
-                  </label>
-                  <SelectCombobox
-                    value={debtAccountId || userAccounts[0]?.id || ''}
-                    onValueChange={onAccountChange}
-                    options={userAccounts.map((acc) => ({
-                      value: acc.id,
-                      label: acc.name,
-                    }))}
-                    placeholder="Selecione a conta"
-                  />
-                </div>
+                {(debtDirection === 'THEY_OWE_ME' || debtAlreadyPaid) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Conta
+                    </label>
+                    <SelectCombobox
+                      value={debtAccountId || userAccounts[0]?.id || ''}
+                      onValueChange={onAccountChange}
+                      options={userAccounts.map((acc) => ({
+                        value: acc.id,
+                        label: acc.name,
+                      }))}
+                      placeholder="Selecione a conta"
+                    />
+                  </div>
+                )}
               </div>
+
+              {debtDirection === 'I_OWE_THEM' && onAlreadyPaidChange && (
+                <label className="flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={debtAlreadyPaid}
+                    onChange={(e) => onAlreadyPaidChange(e.target.checked)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                    Pago
+                  </span>
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                    (Já paguei minha parte ao amigo)
+                  </span>
+                </label>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -694,22 +808,36 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                 })}
               </div>
 
-              <div className="flex items-center justify-between text-xs px-1">
+              <div className="flex items-center justify-between gap-2 text-xs px-1">
                 <span className="text-gray-500 dark:text-gray-400">
                   Total: {formatCurrency(distributedTotal, baseCurrency)} de{' '}
                   {formatCurrency(totalAmountNumeric, baseCurrency)}
                 </span>
-                {debtSplitRule === 'PERCENTAGE' && (
-                  <span
-                    className={
-                      Math.abs(distributedPct - 100) <= 0.5
-                        ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                        : 'text-rose-500 font-medium'
-                    }
-                  >
-                    {distributedPct}% / 100%
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {onEqualizeSmallest &&
+                    splitParticipants.length > 2 &&
+                    debtSplitRule !== 'EQUAL' && (
+                      <button
+                        type="button"
+                        onClick={onEqualizeSmallest}
+                        className="px-2 py-0.5 text-[11px] font-medium rounded border border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-950/30 transition-colors"
+                        title="Dividir o restante igualmente entre os menores valores"
+                      >
+                        Igualar
+                      </button>
+                    )}
+                  {debtSplitRule === 'PERCENTAGE' && (
+                    <span
+                      className={
+                        Math.abs(distributedPct - 100) <= 0.5
+                          ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                          : 'text-rose-500 font-medium'
+                      }
+                    >
+                      {distributedPct}% / 100%
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">

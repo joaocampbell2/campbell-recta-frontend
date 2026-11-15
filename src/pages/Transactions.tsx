@@ -13,13 +13,14 @@ import { useHouseholds } from '../hooks/api/useHouseholds';
 import { type DateRange } from '../components/DateRangePicker';
 import { CategoryType } from '../lib/enums';
 import { 
-  Plus, Download,
+  Plus, Download, Upload,
   Wallet, Briefcase, TrendingUp, ShoppingBag, Home, DollarSign,
   UtensilsCrossed, Car, House, Heart, GraduationCap, Film, Shirt,
   Zap, CreditCard, ShoppingCart, ShoppingBasket, Utensils, Droplet, Pill, MoreHorizontal, Circle,
   ArrowLeftRight
 } from 'lucide-react';
 import TransactionModal from '../components/TransactionModal';
+import ImportCsvModal from '../components/ImportCsvModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { Transaction } from '../types';
 import { PageButton } from '../components/PageButton';
@@ -50,6 +51,7 @@ const Transactions = () => {
   const { data: households } = useHouseholds();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [viewingTransaction, setViewingTransaction] = useState<Transaction | null>(null);
   const [searchInput, setSearchInput] = useState<string>(''); // Input value (updates immediately)
@@ -688,6 +690,14 @@ const Transactions = () => {
         {/* Desktop: todos os botões */}
         <div className="hidden sm:flex gap-2 items-center w-auto flex-shrink-0">
           <PageButton
+            onClick={() => setIsImportModalOpen(true)}
+            variant="secondary"
+            icon={Upload}
+            aria-label="Importar CSV"
+          >
+            Importar CSV
+          </PageButton>
+          <PageButton
             onClick={exportToCSV}
             variant="secondary"
             icon={Download}
@@ -715,6 +725,15 @@ const Transactions = () => {
             {t.newTransaction}
           </PageButton>
           <div className="flex gap-2">
+            <PageButton
+              onClick={() => setIsImportModalOpen(true)}
+              variant="secondary"
+              icon={Upload}
+              aria-label="Importar CSV"
+              className="flex-1"
+            >
+              Importar CSV
+            </PageButton>
             <PageButton
               onClick={exportToCSV}
               variant="secondary"
@@ -857,6 +876,13 @@ const Transactions = () => {
           readOnly={!!viewingTransaction}
         />
       )}
+
+      <ImportCsvModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        accounts={accounts}
+        householdId={householdId ?? undefined}
+      />
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
