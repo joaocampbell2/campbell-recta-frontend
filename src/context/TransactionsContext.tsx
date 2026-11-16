@@ -121,6 +121,8 @@ const convertTransactionFromBackend = (t: BackendTransaction, translations?: Rec
       installmentNumber: t.installmentNumber,
       totalInstallments: t.totalInstallments,
       notes: (t as any).notes,
+      splitDebtId: (t as any).splitDebtId || null,
+      splitSettlementId: (t as any).splitSettlementId || null,
       isSplit: (t as any).isSplit || false,
       splits: (t as any).splits ? (t as any).splits.map((split: any) => ({
         userId: split.userId,
@@ -172,6 +174,8 @@ const convertTransactionFromBackend = (t: BackendTransaction, translations?: Rec
     installmentNumber: t.installmentNumber,
     totalInstallments: t.totalInstallments,
     notes: (t as any).notes,
+    splitDebtId: (t as any).splitDebtId || null,
+    splitSettlementId: (t as any).splitSettlementId || null,
     isSplit: (t as any).isSplit || false,
     splits: (t as any).splits ? (t as any).splits.map((split: any) => ({
       userId: split.userId,
@@ -352,7 +356,7 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
   const { data: budgetsData, isLoading: budgetsLoading } = useBudgetsBackend(budgetsParams);
   const { data: recurringData, isLoading: recurringLoading } = useRecurringTransactionsBackend(recurringParams);
   const { data: savingsGoalsData, isLoading: savingsGoalsLoading } = useSavingsGoalsBackend(savingsGoalsParams);
-  const { data: categoriesData = [] } = useCategories({ householdId: householdId ?? undefined, type: undefined });
+  const { data: categoriesData = [] } = useCategories({ householdId: householdId ?? undefined, type: undefined, includeArchived: true });
   const custom = useMemo(() =>
     categoriesData.filter((c: { isSystem: boolean }) => !c.isSystem).map((c: { id: string; name: string; type: string; color?: string | null; icon?: string | null }) =>
       ({ id: c.id, name: c.name, type: c.type, color: c.color, icon: c.icon })
@@ -540,8 +544,8 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
     }
   }, [updateTransaction, t, custom]);
 
-  const deleteTransactionFn = useCallback(async (id: string): Promise<void> => {
-    await deleteTransaction.mutateAsync(id);
+  const deleteTransactionFn = useCallback(async (id: string, options?: { deleteSplitDebt?: boolean }): Promise<void> => {
+    await deleteTransaction.mutateAsync(options?.deleteSplitDebt ? { id, deleteSplitDebt: true } : id);
     analyticsHelpers.logTransactionDeleted();
   }, [deleteTransaction]);
 
@@ -872,25 +876,11 @@ export const TransactionsProvider = ({ children }: TransactionsProviderProps) =>
     const isCreditCardInstallment =
       !!linkedAccount && linkedAccount.type === AccountType.CREDIT;
 
-    // For credit cards, the purchase date and the first-invoice month can
-    // differ. If the user buys on or after closingDay, the purchase lands in
-    // the NEXT month's invoice — so the first installment must be pushed one
-    // month forward to avoid two installments falling in the same calendar
-    // month (the bug reported on Reddit).
     const purchaseDate = new Date(transaction.date);
-    let firstInstallmentAnchor = purchaseDate;
-    if (
-      isCreditCardInstallment &&
-      linkedAccount.closingDay !== undefined &&
-      linkedAccount.closingDay !== null &&
-      purchaseDate.getDate() >= linkedAccount.closingDay
-    ) {
-      firstInstallmentAnchor = addMonths(purchaseDate, 1);
-    }
 
     const transactionsToCreate = [];
     for (let i = 0; i < installments; i++) {
-      const installmentDate = addMonths(firstInstallmentAnchor, i);
+      const installmentDate = addMonths(purchaseDate, i);
       const catName = (toCategoryName(transaction.category, t as unknown as Record<string, string>, custom as CustomCategoryInfo[] | undefined) || CategoryName.OTHER_EXPENSES) as CategoryName;
       const accountId = transaction.accountId || accounts[0]?.id;
       if (!accountId) {

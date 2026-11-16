@@ -8,6 +8,7 @@ export interface ParsedCsvTransaction {
   rawAmount: number;
   amount: number;
   type: TransactionType.INCOME | TransactionType.EXPENSE;
+  suggestedCategoryName?: string;
 }
 
 /**
@@ -136,27 +137,44 @@ export function parseNubankCsv(content: string): ParsedCsvTransaction[] {
     throw new Error('O arquivo CSV está vazio ou não possui transações.');
   }
 
-  const headerFields = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
+  const firstLine = lines[0];
+  const delimiter =
+    firstLine.includes(';') && !firstLine.includes(',') ? ';' : ',';
+
+  const normalizeHeader = (h: string) =>
+    h
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const headerFields = parseCsvLine(firstLine, delimiter).map(normalizeHeader);
 
   const dateIdx = headerFields.findIndex((h) => h === 'date' || h === 'data');
   const titleIdx = headerFields.findIndex(
-    (h) => h === 'title' || h === 'descrição' || h === 'descricao' || h === 'description'
+    (h) => h === 'title' || h === 'descricao' || h === 'description' || h.startsWith('descri')
   );
   const amountIdx = headerFields.findIndex(
     (h) => h === 'amount' || h === 'valor' || h === 'value'
   );
+  const idIdx = headerFields.findIndex(
+    (h) => h === 'identificador' || h === 'id'
+  );
 
   if (dateIdx === -1 || titleIdx === -1 || amountIdx === -1) {
     throw new Error(
-      'Formato de CSV não reconhecido. Esperado cabeçalho da Nubank (date, title, amount).'
+      'Formato de CSV não reconhecido. Esperado cabeçalho da Nubank (date, title, amount ou Data, Valor, Identificador, Descrição).'
     );
   }
 
-  const isNuContaFormat = headerFields.includes('identificador') || headerFields[0] === 'data';
+  const isNuContaFormat =
+    idIdx !== -1 ||
+    headerFields[dateIdx] === 'data' ||
+    headerFields[amountIdx] === 'valor';
   const rows: ParsedCsvTransaction[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const fields = parseCsvLine(lines[i]);
+    const fields = parseCsvLine(lines[i], delimiter);
     if (fields.length <= Math.max(dateIdx, titleIdx, amountIdx)) {
       continue;
     }
@@ -164,6 +182,7 @@ export function parseNubankCsv(content: string): ParsedCsvTransaction[] {
     const rawDate = fields[dateIdx];
     const rawTitle = fields[titleIdx];
     const rawAmountStr = fields[amountIdx];
+    const externalId = idIdx !== -1 ? fields[idIdx]?.trim() : '';
 
     const date = parseCsvDate(rawDate);
     const rawAmount = parseCsvAmount(rawAmountStr);
@@ -175,12 +194,13 @@ export function parseNubankCsv(content: string): ParsedCsvTransaction[] {
     // Nubank Credit Card CSV: positive = purchase (EXPENSE), negative = payment/refund (INCOME)
     // Nubank Account CSV: negative = outgoing (EXPENSE), positive = incoming (INCOME)
     const isIncome = isNuContaFormat ? rawAmount > 0 : rawAmount < 0;
+    const desc = rawTitle || 'Transação importada';
 
     rows.push({
-      id: `csv-${i}-${rawDate}-${Math.random().toString(36).slice(2, 8)}`,
+      id: externalId || `csv-${i}-${rawDate}-${Math.random().toString(36).slice(2, 8)}`,
       date,
       dateStr: rawDate,
-      description: rawTitle || 'Transação importada',
+      description: desc,
       rawAmount,
       amount: Math.abs(rawAmount),
       type: isIncome ? TransactionType.INCOME : TransactionType.EXPENSE,

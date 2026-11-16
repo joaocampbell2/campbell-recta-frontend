@@ -12,9 +12,9 @@ import {
   useSplitGroups,
   useCreateSplitDebts,
   useCreateSplitFriend,
-  useSettleSplitDebt,
 } from '../hooks/api/useSplitwise';
-import { CategoryName, TransactionType } from '../lib/enums';
+import { CategoryName } from '../lib/enums';
+import { formatDateForAPI } from '../utils/format';
 import type { Friend, SplitGroup, SplitDirection, SplitRule } from '../pages/Loans';
 
 const LAST_DEBT_ACCOUNT_KEY = 'recta_split_last_debt_account_v1';
@@ -23,6 +23,11 @@ interface SplitDebtWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultAccountId?: string | null;
+  initialDescription?: string;
+  initialAmount?: number;
+  initialCategory?: string;
+  initialDirection?: SplitDirection;
+  initialDate?: Date | null;
   onCreated?: (debtId?: string) => void;
   onSwitchToTransaction?: () => void;
 }
@@ -31,24 +36,23 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
   isOpen,
   onClose,
   defaultAccountId,
+  initialDescription,
+  initialAmount,
+  initialCategory,
+  initialDirection,
+  initialDate,
   onCreated,
   onSwitchToTransaction,
 }) => {
   const { baseCurrency } = useCurrency();
   const { error: showError, success: showSuccess } = useToastContext();
   const { householdId } = useDefaultHousehold();
-  const {
-    accounts: contextAccounts,
-    customCategories,
-    addTransaction,
-    createInstallments,
-  } = useTransactions();
+  const { accounts: contextAccounts } = useTransactions();
   const { data: regularAccountsData } = useAccounts({ householdId: householdId || '' });
   const { data: backendFriends } = useSplitFriends(householdId || undefined);
   const { data: backendGroups } = useSplitGroups(householdId || undefined);
   const createDebtsMutation = useCreateSplitDebts();
   const createFriendMutation = useCreateSplitFriend();
-  const settleDebtMutation = useSettleSplitDebt();
 
   const userAccounts = useMemo(() => {
     const raw = regularAccountsData?.accounts?.length
@@ -95,6 +99,7 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [memberSearchTerm, setMemberSearchTerm] = useState<string>('');
   const [debtInstallmentsCount, setDebtInstallmentsCount] = useState<string>('1');
+  const [debtDate, setDebtDate] = useState<Date | null>(() => new Date());
   const [equalIncludedIds, setEqualIncludedIds] = useState<string[]>([]);
   const [percentageByParticipant, setPercentageByParticipant] = useState<Record<string, string>>({});
   const [amountByParticipant, setAmountByParticipant] = useState<Record<string, string>>({});
@@ -146,13 +151,16 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    totalAmountMask.setValue('');
-    setDebtDesc('');
-    setDebtCategory(CategoryName.FOOD);
+    totalAmountMask.setValue(
+      typeof initialAmount === 'number' && initialAmount > 0 ? initialAmount : ''
+    );
+    setDebtDesc(initialDescription || '');
+    setDebtCategory(initialCategory || CategoryName.FOOD);
     setDebtAccountId(resolveInitialAccountId());
     setStep(1);
     setDebtInstallmentsCount('1');
-    setDebtDirection('THEY_OWE_ME');
+    setDebtDate(initialDate || new Date());
+    setDebtDirection(initialDirection || 'THEY_OWE_ME');
     setDebtPayerFriendId('');
     setDebtSplitRule('EQUAL');
     setDebtGroupId('');
@@ -163,7 +171,7 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
     setAmountByParticipant({});
     setDebtAlreadyPaid(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, defaultAccountId]);
+  }, [isOpen, defaultAccountId, initialDescription, initialAmount, initialCategory, initialDirection, initialDate]);
 
   const availableMembersForSplit = useMemo(() => {
     const pool = debtGroupId
@@ -319,8 +327,11 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
 
     setIsSubmittingDebt(true);
     try {
+      const isNoAccount = debtAccountId === 'NONE';
       const validAccountId =
-        chosenAccountId && !chosenAccountId.startsWith('acc-') ? chosenAccountId : undefined;
+        !isNoAccount && chosenAccountId && !chosenAccountId.startsWith('acc-')
+          ? chosenAccountId
+          : undefined;
 
       if (debtDirection === 'THEY_OWE_ME') {
         const shares = targetMemberIds
@@ -332,13 +343,18 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
 
         if (shares.length === 0) return;
 
+        const myShareAmount = Number((participantShares['me'] || 0).toFixed(2));
+
         const created = await createDebtsMutation.mutateAsync({
           householdId: householdId || undefined,
           description: debtDesc.trim(),
           category: debtCategory,
-          accountId: chosenAccountId,
-          accountName: chosenAccountName,
+          accountId: isNoAccount ? undefined : validAccountId,
+          accountName: isNoAccount ? undefined : chosenAccountName,
           originalTotalAmount: numericTotal,
+          myShareAmount,
+          date: debtDate ? formatDateForAPI(debtDate) : undefined,
+          createTransactions: !isNoAccount,
           direction: 'THEY_OWE_ME',
           splitRule: debtSplitRule,
           groupId: debtGroupId || undefined,
@@ -346,54 +362,6 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
           shares,
         });
         if (created?.[0]?.id) onCreated?.(created[0].id);
-
-        const debtsCustomCat = customCategories?.find((c) => {
-          const lower = c.name.toLowerCase();
-          return lower.includes('dívida') || lower.includes('divida');
-        });
-        const debtsCategoryValue = debtsCustomCat
-          ? `CUSTOM:${debtsCustomCat.id}`
-          : CategoryName.DEBTS;
-        const txNow = new Date();
-        const txPayloads: Array<Parameters<typeof addTransaction>[0]> = [];
-
-        const myShareAmount = Number((participantShares['me'] || 0).toFixed(2));
-        if (myShareAmount > 0) {
-          txPayloads.push({
-            description: debtDesc.trim(),
-            amount: myShareAmount,
-            type: TransactionType.EXPENSE,
-            category: debtCategory,
-            date: txNow,
-            accountId: validAccountId,
-            paid: count === 1,
-          });
-        }
-
-        shares.forEach((share) => {
-          const friend = friendMap.get(share.friendId);
-          txPayloads.push({
-            description: `${debtDesc.trim()}${friend ? ` (${friend.name})` : ''}`,
-            amount: share.debtTotalAmount,
-            type: TransactionType.EXPENSE,
-            category: debtsCategoryValue,
-            date: txNow,
-            accountId: validAccountId,
-            paid: count === 1,
-          });
-        });
-
-        if (count > 1) {
-          for (const payload of txPayloads) {
-            try {
-              await createInstallments(payload, count);
-            } catch {
-              // Não interrompe a criação das demais séries se uma falhar
-            }
-          }
-        } else {
-          await Promise.allSettled(txPayloads.map((payload) => addTransaction(payload)));
-        }
       } else {
         const payerFriendId =
           debtPayerFriendId && targetMemberIds.includes(debtPayerFriendId)
@@ -406,10 +374,13 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
           householdId: householdId || undefined,
           description: debtDesc.trim(),
           category: debtCategory,
-          ...(debtAlreadyPaid
-            ? { accountId: chosenAccountId, accountName: chosenAccountName }
+          ...(debtAlreadyPaid && validAccountId
+            ? { accountId: validAccountId, accountName: chosenAccountName }
             : {}),
           originalTotalAmount: numericTotal,
+          alreadyPaid: debtAlreadyPaid,
+          date: debtDate ? formatDateForAPI(debtDate) : undefined,
+          createTransactions: true,
           direction: 'I_OWE_THEM',
           payerFriendId,
           splitRule: 'FULL_AMOUNT',
@@ -424,43 +395,13 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
         });
         if (created?.[0]?.id) {
           onCreated?.(created[0].id);
-          if (debtAlreadyPaid) {
-            try {
-              await settleDebtMutation.mutateAsync({
-                debtId: created[0].id,
-                mode: 'full',
-                paidAmount: Number(myDebtTotal.toFixed(2)),
-                forgiveRemainder: false,
-              });
-            } catch {
-              // Mantém criação mesmo se quitação automática falhar
-            }
-          }
-        }
-
-        const myTxPayload: Parameters<typeof addTransaction>[0] = {
-          description: debtDesc.trim(),
-          amount: Number(myDebtTotal.toFixed(2)),
-          type: TransactionType.EXPENSE,
-          category: debtCategory,
-          date: new Date(),
-          accountId: debtAlreadyPaid ? validAccountId : undefined,
-          paid: debtAlreadyPaid,
-        };
-        try {
-          if (count > 1) {
-            await createInstallments(myTxPayload, count);
-          } else {
-            await addTransaction(myTxPayload);
-          }
-        } catch {
-          // Não interrompe o fluxo caso a criação da transação falhe
         }
       }
 
       setDebtDesc('');
       totalAmountMask.setValue('');
       setDebtInstallmentsCount('1');
+      setDebtDate(new Date());
       setPercentageByParticipant({});
       setAmountByParticipant({});
       setDebtAlreadyPaid(false);
@@ -524,7 +465,7 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
       debtAccountId={debtAccountId}
       onAccountChange={(accountId) => {
         setDebtAccountId(accountId);
-        if (accountId) {
+        if (accountId && accountId !== 'NONE') {
           localStorage.setItem(
             `${LAST_DEBT_ACCOUNT_KEY}_${householdId || 'default'}`,
             accountId
@@ -538,6 +479,8 @@ const SplitDebtWizardModal: React.FC<SplitDebtWizardModalProps> = ({
       onTotalAmountChange={totalAmountMask.onChange}
       debtInstallmentsCount={debtInstallmentsCount}
       onInstallmentsCountChange={setDebtInstallmentsCount}
+      debtDate={debtDate}
+      onDateChange={setDebtDate}
       onGoToStep3={handleGoToStep3}
       debtSplitRule={debtSplitRule}
       onSplitRuleChange={setDebtSplitRule}

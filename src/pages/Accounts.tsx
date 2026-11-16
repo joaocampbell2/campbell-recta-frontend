@@ -16,27 +16,6 @@ import {
   Info,
   X,
   Circle,
-  Briefcase,
-  TrendingUp,
-  ShoppingBag,
-  Home,
-  DollarSign,
-  UtensilsCrossed,
-  Car,
-  House,
-  Heart,
-  GraduationCap,
-  Film,
-  Shirt,
-  Zap,
-  CreditCard,
-  ShoppingCart,
-  ShoppingBasket,
-  Utensils,
-  Droplet,
-  Pill,
-  MoreHorizontal,
-  ArrowLeftRight,
 } from "lucide-react";
 import DeleteAccountModal from "../components/DeleteAccountModal";
 import { AccountModal } from "../components/AccountModal";
@@ -61,6 +40,7 @@ import { ja as jaLocale } from "date-fns/locale/ja";
 import { zhCN as zhCNLocale } from "date-fns/locale/zh-CN";
 import { arSA as arSALocale } from "date-fns/locale/ar-SA";
 import { CategoryName, getCategoryDisplayName, TransactionType, getCategoryIconName } from "../lib/enums";
+import { getCategoryIconComponent } from "../utils/categoryIcons";
 import { EmptyState } from "../components/EmptyState";
 import type React from "react";
 
@@ -100,6 +80,7 @@ const Accounts = () => {
   const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
     isOpen: boolean;
     transactionId: string | null;
+    hasSplitLink?: boolean;
   }>({
     isOpen: false,
     transactionId: null,
@@ -259,13 +240,7 @@ const Accounts = () => {
   const getCategoryIcon = useCallback((categoryName: string | undefined, customCategories?: Array<{ id: string; name: string; icon?: string | null }>) => {
     if (!categoryName) return Circle;
     const iconName = getCategoryIconName(categoryName, customCategories);
-    const iconMap: Record<string, React.ComponentType<any>> = {
-      Wallet, Briefcase, TrendingUp, ShoppingBag, Home, DollarSign,
-      UtensilsCrossed, Car, House, Heart, GraduationCap, Film, Shirt,
-      Zap, CreditCard, ShoppingCart, ShoppingBasket, Utensils, Droplet, Pill, MoreHorizontal, Circle,
-      ArrowLeftRight
-    };
-    return iconMap[iconName] || Circle;
+    return getCategoryIconComponent(iconName);
   }, []);
 
   // Format transaction description
@@ -533,13 +508,18 @@ const Accounts = () => {
     setConfirmDeleteModal({
       isOpen: true,
       transactionId: transaction.id || null,
+      hasSplitLink: Boolean(
+        transaction.splitDebtId || transaction.splitSettlementId
+      ),
     });
   };
 
   const handleConfirmDeleteTransaction = async () => {
     if (!confirmDeleteModal.transactionId) return;
     try {
-      await deleteTransaction(confirmDeleteModal.transactionId);
+      await deleteTransaction(confirmDeleteModal.transactionId, {
+        deleteSplitDebt: confirmDeleteModal.hasSplitLink,
+      });
       setConfirmDeleteModal({ isOpen: false, transactionId: null });
     } catch (err: unknown) {
       // Error deleting transaction
@@ -898,11 +878,18 @@ const Accounts = () => {
           setConfirmDeleteModal({ isOpen: false, transactionId: null })
         }
         onConfirm={handleConfirmDeleteTransaction}
-        title={t.delete}
-        message={
-          t.confirmDeleteTransaction ||
-          "Tem certeza que deseja excluir esta transação?"
+        title={
+          confirmDeleteModal.hasSplitLink
+            ? 'Excluir transação e dívida vinculada'
+            : t.delete
         }
+        message={
+          confirmDeleteModal.hasSplitLink
+            ? 'Esta transação pertence a uma dívida/acerto do módulo Divisão de Contas. Ao confirmar, a transação e a dívida vinculada serão excluídas juntas.'
+            : t.confirmDeleteTransaction ||
+              "Tem certeza que deseja excluir esta transação?"
+        }
+        confirmText={confirmDeleteModal.hasSplitLink ? 'Excluir ambos' : undefined}
         variant="danger"
       />
 

@@ -10,3 +10,4 @@ export { AccountField } from './AccountField';
 export { TransactionFilters } from './TransactionFilters';
 export { TransactionList } from './TransactionList';
 export { TransactionItem } from './TransactionItem';
+export { CreditCardInvoicePaymentSection } from './CreditCardInvoicePaymentSection';

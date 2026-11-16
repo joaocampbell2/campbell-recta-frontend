@@ -65,7 +65,7 @@ export enum CategoryName {
   // Internal movement categories
   TRANSFER = 'TRANSFER',
   ALLOCATION = 'ALLOCATION',
-  CREDIT_CARD_INVOICE = 'CUSTOM:e61a55a5-d8c4-4f6a-9a9b-272d740d125c',
+  CREDIT_CARD_INVOICE = 'CREDIT_CARD_INVOICE',
   DEBTS = "CUSTOM:23aabe0f-3545-432b-b8dc-5fb73fcd119c"
 }
 
@@ -168,6 +168,7 @@ export function getCategoriesByType(type: CategoryType): CategoryName[] {
     CategoryName.RESTAURANT,
     CategoryName.FUEL,
     CategoryName.PHARMACY,
+    CategoryName.CREDIT_CARD_INVOICE,
     CategoryName.OTHER_EXPENSES,
   ];
 }
@@ -209,7 +210,6 @@ export function getCategoryDisplayName(
     const id = categoryName.slice(CUSTOM_CATEGORY_PREFIX.length);
     const c = customCategories.find((x) => x.id === id);
     if (c) return c.name;
-    return categoryName;
   }
   const key = CATEGORY_NAME_TO_TRANSLATION_KEY[categoryName as CategoryName];
   if (translations && key) {
@@ -296,6 +296,7 @@ export const CATEGORY_NAME_ICONS: Record<CategoryName, string> = {
   // Internal movement categories
   [CategoryName.TRANSFER]: 'ArrowLeftRight',
   [CategoryName.ALLOCATION]: 'CreditCard',
+  [CategoryName.CREDIT_CARD_INVOICE]: 'CreditCard',
 };
 
 /**
@@ -339,6 +340,7 @@ const CATEGORY_NAME_COLORS: Record<string, string> = {
   [CategoryName.OTHER_EXPENSES]: '#64748B',
   [CategoryName.TRANSFER]: '#6366F1',
   [CategoryName.ALLOCATION]: '#8B5CF6',
+  [CategoryName.CREDIT_CARD_INVOICE]: '#6366F1',
 };
 
 /**

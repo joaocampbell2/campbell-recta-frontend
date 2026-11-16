@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Search, Check, UserPlus } from 'lucide-react';
 import CategoryCombobox from './CategoryCombobox';
 import SelectCombobox from './SelectCombobox';
+import { DatePicker } from './DatePicker';
 import { TransactionType } from '../lib/enums';
 import { formatCurrency } from '../utils/format';
 import type { Friend, SplitGroup, SplitDirection, SplitRule } from '../pages/Loans';
@@ -41,6 +42,8 @@ interface SplitDebtModalProps {
   onTotalAmountChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   debtInstallmentsCount: string;
   onInstallmentsCountChange: (val: string) => void;
+  debtDate?: Date | null;
+  onDateChange?: (date: Date | null) => void;
   onGoToStep3: () => void;
   // Step 3
   debtSplitRule: SplitRule;
@@ -156,6 +159,8 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
   onTotalAmountChange,
   debtInstallmentsCount,
   onInstallmentsCountChange,
+  debtDate,
+  onDateChange,
   onGoToStep3,
   debtSplitRule,
   onSplitRuleChange,
@@ -508,10 +513,13 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                     <SelectCombobox
                       value={debtAccountId || userAccounts[0]?.id || ''}
                       onValueChange={onAccountChange}
-                      options={userAccounts.map((acc) => ({
-                        value: acc.id,
-                        label: acc.name,
-                      }))}
+                      options={[
+                        ...userAccounts.map((acc) => ({
+                          value: acc.id,
+                          label: acc.name,
+                        })),
+                        { value: 'NONE', label: 'Nenhuma conta' },
+                      ]}
                       placeholder="Selecione a conta"
                     />
                   </div>
@@ -580,6 +588,19 @@ const SplitDebtModal: React.FC<SplitDebtModalProps> = ({
                   />
                 </div>
               </div>
+
+              {onDateChange && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Data
+                  </label>
+                  <DatePicker
+                    value={debtDate}
+                    onChange={onDateChange}
+                    placeholder="Selecione a data"
+                  />
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-800">
                 <button

@@ -1,8 +1,12 @@
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import { auth } from '../config/firebase';
 
-// Get API base URL from environment variable or default to localhost
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// Build-time toggle to use localhost backend instead of the remote VITE_API_BASE_URL
+const USE_LOCAL_BACKEND = import.meta.env.VITE_USE_LOCAL_BACKEND === 'true';
+const LOCAL_API_BASE_URL = import.meta.env.VITE_API_LOCAL_URL || 'http://localhost:3000';
+const REMOTE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || LOCAL_API_BASE_URL;
+
+const API_BASE_URL = USE_LOCAL_BACKEND ? LOCAL_API_BASE_URL : REMOTE_API_BASE_URL;
 
 export interface ApiResponse<T> {
   success: boolean;

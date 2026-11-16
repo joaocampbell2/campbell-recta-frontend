@@ -12,37 +12,26 @@ import { useAuthUser } from '../hooks/api/useAuth';
 import { useHouseholds } from '../hooks/api/useHouseholds';
 import { type DateRange } from '../components/DateRangePicker';
 import { CategoryType } from '../lib/enums';
-import { 
-  Plus, Download, Upload,
-  Wallet, Briefcase, TrendingUp, ShoppingBag, Home, DollarSign,
-  UtensilsCrossed, Car, House, Heart, GraduationCap, Film, Shirt,
-  Zap, CreditCard, ShoppingCart, ShoppingBasket, Utensils, Droplet, Pill, MoreHorizontal, Circle,
-  ArrowLeftRight
-} from 'lucide-react';
+import { Plus, Download, Upload, Circle } from 'lucide-react';
 import TransactionModal from '../components/TransactionModal';
 import ImportCsvModal from '../components/ImportCsvModal';
+import ExportCsvModal from '../components/ExportCsvModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { Transaction } from '../types';
 import { PageButton } from '../components/PageButton';
 import { CategoryName, getCategoryIconName, getCategoryDisplayName, TransactionType } from '../lib/enums';
+import { getCategoryIconComponent } from '../utils/categoryIcons';
 import { TransactionFilters, TransactionList } from '../components/transactions';
 
 // Helper function to get icon component for category (supports enum or CUSTOM:uuid)
 const getCategoryIcon = (categoryName: string | undefined, customCategories?: { id: string; name: string; icon?: string | null }[]) => {
   if (!categoryName) return Circle;
   const iconName = getCategoryIconName(categoryName, customCategories);
-  const iconMap: Record<string, React.ComponentType<any>> = {
-    Wallet, Briefcase, TrendingUp, ShoppingBag, Home, DollarSign,
-    UtensilsCrossed, Car, House, Heart, GraduationCap, Film, Shirt,
-    Zap, CreditCard, ShoppingCart, ShoppingBasket, Utensils, Droplet, Pill, MoreHorizontal, Circle,
-    ArrowLeftRight
-  };
-  
-  return iconMap[iconName] || Circle;
+  return getCategoryIconComponent(iconName);
 };
 
 const Transactions = () => {
-  const { exportToCSV, accounts, deleteTransaction, updateTransaction, customCategories } = useTransactionsContext();
+  const { accounts, deleteTransaction, updateTransaction, customCategories } = useTransactionsContext();
   const { baseCurrency } = useCurrency();
   const { t, locale } = useI18n();
   const { registerHandler, unregisterHandler } = useCommandMenu();
@@ -52,6 +41,7 @@ const Transactions = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [viewingTransaction, setViewingTransaction] = useState<Transaction | null>(null);
   const [searchInput, setSearchInput] = useState<string>(''); // Input value (updates immediately)
@@ -244,6 +234,8 @@ const Transactions = () => {
           installmentNumber: t.installmentNumber,
           totalInstallments: t.totalInstallments,
           notes: t.notes,
+          splitDebtId: (t as any).splitDebtId || null,
+          splitSettlementId: (t as any).splitSettlementId || null,
           isSplit: (t as any).isSplit || false,
           splits: (t as any).splits ? (t as any).splits.map((split: any) => ({
             userId: split.userId,
@@ -315,7 +307,11 @@ const Transactions = () => {
       setSearchParams({}, { replace: true });
     }
   };
-  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; transactionId: string | null }>({
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    transactionId: string | null;
+    hasSplitLink?: boolean;
+  }>({
     isOpen: false,
     transactionId: null,
   });
@@ -559,12 +555,17 @@ const Transactions = () => {
     if (transaction && isTransactionSharedAndUserParticipated(transaction)) {
       return; // Do nothing - menu should be disabled, but add safety check
     }
-    setConfirmModal({ isOpen: true, transactionId: id });
+    const hasSplitLink = Boolean(
+      transaction?.splitDebtId || transaction?.splitSettlementId
+    );
+    setConfirmModal({ isOpen: true, transactionId: id, hasSplitLink });
   };
 
   const handleConfirmDelete = async (): Promise<void> => {
     if (confirmModal.transactionId) {
-      await deleteTransaction(confirmModal.transactionId);
+      await deleteTransaction(confirmModal.transactionId, {
+        deleteSplitDebt: confirmModal.hasSplitLink,
+      });
       setConfirmModal({ isOpen: false, transactionId: null });
     }
   };
@@ -698,12 +699,12 @@ const Transactions = () => {
             Importar CSV
           </PageButton>
           <PageButton
-            onClick={exportToCSV}
+            onClick={() => setIsExportModalOpen(true)}
             variant="secondary"
             icon={Download}
             aria-label={t.exportCSV}
           >
-            CSV
+            Exportar CSV
           </PageButton>
           <PageButton
             onClick={handleAdd}
@@ -735,13 +736,13 @@ const Transactions = () => {
               Importar CSV
             </PageButton>
             <PageButton
-              onClick={exportToCSV}
+              onClick={() => setIsExportModalOpen(true)}
               variant="secondary"
               icon={Download}
               aria-label={t.exportCSV}
               className="flex-1"
             >
-              CSV
+              Exportar CSV
             </PageButton>
           </div>
         </div>
@@ -884,12 +885,25 @@ const Transactions = () => {
         householdId={householdId ?? undefined}
       />
 
+      <ExportCsvModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        accounts={accounts}
+        householdId={householdId ?? undefined}
+        customCategories={customCategories}
+      />
+
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal({ isOpen: false, transactionId: null })}
         onConfirm={handleConfirmDelete}
-        title={t.delete}
-        message={`${t.delete} ${t.transaction?.toLowerCase() || t.transactions.toLowerCase()}?`}
+        title={confirmModal.hasSplitLink ? 'Excluir transação e dívida vinculada' : t.delete}
+        message={
+          confirmModal.hasSplitLink
+            ? 'Esta transação pertence a uma dívida/acerto do módulo Divisão de Contas. Ao confirmar, a transação e a dívida vinculada serão excluídas juntas.'
+            : `${t.delete} ${t.transaction?.toLowerCase() || t.transactions.toLowerCase()}?`
+        }
+        confirmText={confirmModal.hasSplitLink ? 'Excluir ambos' : undefined}
         variant="danger"
       />
     </div>

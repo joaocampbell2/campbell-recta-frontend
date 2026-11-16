@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Upload, FileSpreadsheet, Trash2, ArrowLeft, AlertCircle } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, Trash2, ArrowLeft, AlertCircle, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Account } from '../types';
-import { AccountType, TransactionType } from '../lib/enums';
+import { AccountType, CategoryName, TransactionType } from '../lib/enums';
 import { useI18n } from '../context/I18nContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useToastContext } from '../context/ToastContext';
@@ -12,6 +12,7 @@ import { parseNubankCsv, ParsedCsvTransaction } from '../utils/csvImport';
 import { DatePicker } from './DatePicker';
 import SelectCombobox from './SelectCombobox';
 import CategoryCombobox from './CategoryCombobox';
+import SplitDebtWizardModal from './SplitDebtWizardModal';
 import { LoadingSpinner } from './LoadingSpinner';
 
 interface ImportCsvModalProps {
@@ -19,6 +20,7 @@ interface ImportCsvModalProps {
   onClose: () => void;
   accounts: Account[];
   householdId?: string;
+  defaultAccountId?: string | null;
 }
 
 interface ReviewTransactionItem extends ParsedCsvTransaction {
@@ -32,6 +34,7 @@ export const ImportCsvModal = ({
   onClose,
   accounts,
   householdId,
+  defaultAccountId,
 }: ImportCsvModalProps) => {
   const { t } = useI18n();
   const { baseCurrency } = useCurrency();
@@ -39,6 +42,7 @@ export const ImportCsvModal = ({
   const batchCreateTransactions = useBatchCreateTransactions();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prevIsOpenRef = useRef<boolean>(false);
 
   const [step, setStep] = useState<ModalStep>('setup');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -49,6 +53,7 @@ export const ImportCsvModal = ({
 
   const [items, setItems] = useState<ReviewTransactionItem[]>([]);
   const [showValidationErrors, setShowValidationErrors] = useState<boolean>(false);
+  const [splitTargetItem, setSplitTargetItem] = useState<ReviewTransactionItem | null>(null);
 
   const availableAccounts = useMemo(
     () =>
@@ -73,18 +78,28 @@ export const ImportCsvModal = ({
     [availableAccounts, accountId]
   );
 
-  // Reset state whenever modal opens
+  // Reset state only when modal transitions from closed to open
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       setStep('setup');
       setSelectedFile(null);
       setStartDate(null);
-      setAccountId(availableAccounts.length === 1 ? availableAccounts[0].id : '');
+      const hasDefault =
+        defaultAccountId && availableAccounts.some((a) => a.id === defaultAccountId);
+      setAccountId(
+        hasDefault
+          ? defaultAccountId!
+          : availableAccounts.length === 1
+          ? availableAccounts[0].id
+          : ''
+      );
       setSetupError(null);
       setItems([]);
       setShowValidationErrors(false);
+      setSplitTargetItem(null);
     }
-  }, [isOpen, availableAccounts]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, availableAccounts, defaultAccountId]);
 
   // Body scroll lock & Escape handler
   useEffect(() => {
@@ -94,7 +109,12 @@ export const ImportCsvModal = ({
     document.body.style.overflow = 'hidden';
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !batchCreateTransactions.isPending && step !== 'loading') {
+      if (
+        e.key === 'Escape' &&
+        !batchCreateTransactions.isPending &&
+        step !== 'loading' &&
+        !splitTargetItem
+      ) {
         onClose();
       }
     };
@@ -104,7 +124,7 @@ export const ImportCsvModal = ({
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen, onClose, batchCreateTransactions.isPending, step]);
+  }, [isOpen, onClose, batchCreateTransactions.isPending, step, splitTargetItem]);
 
   if (!isOpen) return null;
 
@@ -177,7 +197,7 @@ export const ImportCsvModal = ({
       setItems(
         filteredRows.map((row) => ({
           ...row,
-          categoryName: '',
+          categoryName: row.suggestedCategoryName || '',
         }))
       );
       setShowValidationErrors(false);
@@ -204,7 +224,19 @@ export const ImportCsvModal = ({
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const missingCategoryCount = items.filter((item) => !item.categoryName).length;
+  const handleShiftDate = (id: string, deltaDays: number) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const nextDate = new Date(item.date);
+        nextDate.setDate(nextDate.getDate() + deltaDays);
+        return { ...item, date: nextDate };
+      })
+    );
+  };
+
+  const categorizedItems = items.filter((item) => Boolean(item.categoryName));
+  const remainingItems = items.filter((item) => !item.categoryName);
 
   const totalExpenses = items
     .filter((item) => item.type === TransactionType.EXPENSE)
@@ -217,18 +249,16 @@ export const ImportCsvModal = ({
   const handleImport = async () => {
     if (items.length === 0) return;
 
-    if (missingCategoryCount > 0) {
+    if (categorizedItems.length === 0) {
       setShowValidationErrors(true);
-      showError(
-        `Preencha a categoria de todas as transações (${missingCategoryCount} pendente${missingCategoryCount > 1 ? 's' : ''}).`
-      );
+      showError('Selecione a categoria de pelo menos uma transação para importar.');
       return;
     }
 
     try {
       await batchCreateTransactions.mutateAsync({
         ...(householdId && { householdId }),
-        transactions: items.map((item) => ({
+        transactions: categorizedItems.map((item) => ({
           description: item.description.trim() || 'Transação importada',
           amount: item.amount,
           categoryName: item.categoryName,
@@ -239,15 +269,22 @@ export const ImportCsvModal = ({
       });
 
       success(
-        `${items.length} ${items.length === 1 ? 'transação importada' : 'transações importadas'} com sucesso!`
+        `${categorizedItems.length} ${categorizedItems.length === 1 ? 'transação importada' : 'transações importadas'} com sucesso!`
       );
-      onClose();
+
+      if (remainingItems.length > 0) {
+        setItems(remainingItems);
+        setShowValidationErrors(false);
+      } else {
+        onClose();
+      }
     } catch (err: any) {
       showError(err?.message || 'Erro ao importar transações.');
     }
   };
 
   return createPortal(
+    <>
     <div className="fixed inset-0 z-[60] overflow-y-auto">
       {/* Backdrop */}
       <div
@@ -357,7 +394,7 @@ export const ImportCsvModal = ({
                         Clique ou arraste o arquivo CSV da Nubank aqui
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Formato esperado: date, title, amount (.csv)
+                        Formato esperado: Cartão (date, title, amount) ou Conta (Data, Valor, Identificador, Descrição) (.csv)
                       </p>
                     </div>
                   )}
@@ -479,11 +516,11 @@ export const ImportCsvModal = ({
               </div>
 
               {/* Validation notice */}
-              {showValidationErrors && missingCategoryCount > 0 && (
+              {showValidationErrors && remainingItems.length > 0 && (
                 <div className="flex items-center gap-2 p-2.5 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    Selecione uma categoria para todas as {missingCategoryCount} transação(ões) destacada(s).
+                    Selecione uma categoria para todas as {remainingItems.length} transação(ões) destacada(s).
                   </span>
                 </div>
               )}
@@ -521,9 +558,29 @@ export const ImportCsvModal = ({
                           {/* Date + Value (mobile top row, desktop split) */}
                           <div className="sm:col-span-5 flex flex-col gap-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                                {formatDate(item.date)}
-                              </span>
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleShiftDate(item.id, -1)}
+                                  title="Diminuir 1 dia"
+                                  aria-label="Diminuir 1 dia"
+                                  className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors"
+                                >
+                                  <ChevronLeft className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                                  {formatDate(item.date)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleShiftDate(item.id, 1)}
+                                  title="Avançar 1 dia"
+                                  aria-label="Avançar 1 dia"
+                                  className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors"
+                                >
+                                  <ChevronRight className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                               {isCredit && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                                   Crédito / Estorno
@@ -539,10 +596,13 @@ export const ImportCsvModal = ({
                             />
                           </div>
 
-                          {/* Amount */}
+                          {/* Amount (clickable to split) */}
                           <div className="sm:col-span-2 flex sm:justify-end items-center">
-                            <span
-                              className={`text-sm font-medium whitespace-nowrap ${
+                            <button
+                              type="button"
+                              onClick={() => setSplitTargetItem(item)}
+                              title="Dividir esta transação"
+                              className={`text-sm font-medium whitespace-nowrap hover:underline cursor-pointer ${
                                 isCredit
                                   ? 'text-emerald-600 dark:text-emerald-400'
                                   : 'text-gray-900 dark:text-white'
@@ -550,11 +610,11 @@ export const ImportCsvModal = ({
                             >
                               {isCredit ? '+ ' : ''}
                               {formatCurrency(item.amount, baseCurrency)}
-                            </span>
+                            </button>
                           </div>
 
-                          {/* Category Combobox (starts blank) */}
-                          <div className="sm:col-span-4 min-w-0">
+                          {/* Category Combobox */}
+                          <div className="sm:col-span-3 min-w-0">
                             <CategoryCombobox
                               value={item.categoryName}
                               onValueChange={(val) => handleUpdateCategory(item.id, val)}
@@ -564,8 +624,17 @@ export const ImportCsvModal = ({
                             />
                           </div>
 
-                          {/* Delete row button */}
-                          <div className="sm:col-span-1 flex justify-end">
+                          {/* Actions: Split + Delete row */}
+                          <div className="sm:col-span-2 flex justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setSplitTargetItem(item)}
+                              title="Dividir conta"
+                              aria-label="Dividir conta"
+                              className="p-2 text-gray-400 hover:text-primary-600 dark:text-gray-500 dark:hover:text-primary-400 rounded-md hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                            >
+                              <Users className="h-4 w-4" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleRemoveItem(item.id)}
@@ -607,7 +676,7 @@ export const ImportCsvModal = ({
                   <button
                     type="button"
                     onClick={handleImport}
-                    disabled={items.length === 0 || batchCreateTransactions.isPending}
+                    disabled={categorizedItems.length === 0 || batchCreateTransactions.isPending}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {batchCreateTransactions.isPending ? (
@@ -616,7 +685,7 @@ export const ImportCsvModal = ({
                         Importando...
                       </>
                     ) : (
-                      `Importar ${items.length} ${items.length === 1 ? 'transação' : 'transações'}`
+                      `Importar ${categorizedItems.length} ${categorizedItems.length === 1 ? 'transação' : 'transações'}`
                     )}
                   </button>
                 </div>
@@ -625,7 +694,33 @@ export const ImportCsvModal = ({
           )}
         </div>
       </div>
-    </div>,
+    </div>
+
+    <SplitDebtWizardModal
+      isOpen={Boolean(splitTargetItem)}
+      onClose={() => setSplitTargetItem(null)}
+      defaultAccountId={accountId}
+      initialDescription={splitTargetItem?.description}
+      initialAmount={splitTargetItem?.amount}
+      initialCategory={splitTargetItem?.categoryName || CategoryName.FOOD}
+      initialDirection={
+        splitTargetItem?.type === TransactionType.INCOME ? 'I_OWE_THEM' : 'THEY_OWE_ME'
+      }
+      initialDate={splitTargetItem?.date}
+      onCreated={() => {
+        if (splitTargetItem) {
+          const remaining = items.filter((i) => i.id !== splitTargetItem.id);
+          setItems(remaining);
+          if (remaining.length === 0) {
+            setSplitTargetItem(null);
+            onClose();
+            return;
+          }
+        }
+        setSplitTargetItem(null);
+      }}
+    />
+    </>,
     document.body
   );
 };

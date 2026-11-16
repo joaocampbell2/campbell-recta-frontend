@@ -22,6 +22,13 @@ export interface CreateSplitFriendPayload {
   avatarUrl?: string;
 }
 
+export interface UpdateSplitFriendPayload {
+  id: string;
+  name?: string;
+  emailOrPix?: string | null;
+  avatarUrl?: string | null;
+}
+
 export interface ArchiveSplitFriendPayload {
   id: string;
   archived: boolean;
@@ -47,6 +54,10 @@ export interface CreateSplitDebtPayload {
   accountId?: string;
   accountName?: string;
   originalTotalAmount: number;
+  myShareAmount?: number;
+  alreadyPaid?: boolean;
+  date?: string;
+  createTransactions?: boolean;
   direction: SplitDirection;
   payerFriendId?: string;
   splitRule: SplitRule;
@@ -68,11 +79,40 @@ export interface ToggleInstallmentPayload {
 
 export interface SettleSplitDebtPayload extends SettleDebtOptions {
   debtId: string;
+  existingTransactionId?: string | null;
+}
+
+export interface LinkReimbursementPayload {
+  householdId?: string;
+  existingTransactionId: string;
+  debtIds: string[];
+  forgiveRemainder?: boolean;
+}
+
+export interface SettleFriendPayload {
+  friendId: string;
+  accountId?: string;
+  mode?: 'full' | 'partial';
+  paidAmount?: number;
+  forgiveRemainder?: boolean;
+  month?: string;
+  notes?: string;
+}
+
+export interface SettleFriendResponse {
+  settlementId: string;
+  direction: 'THEY_PAID_ME' | 'I_PAID_THEM';
+  totalPaid: number;
+  forgivenAmount: number;
+  settlementTransactionId: string | null;
+  abonoTransactionId: string | null;
+  debts: SplitDebt[];
 }
 
 export interface SettleFriendMonthPayload {
   friendId: string;
   month: string; // YYYY-MM
+  accountId?: string;
 }
 
 // ============================================================================
@@ -168,6 +208,27 @@ export function useCreateSplitFriend() {
 }
 
 /**
+ * PATCH /split/friends/:id
+ */
+export function useUpdateSplitFriend() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: UpdateSplitFriendPayload) => {
+      const response = await apiClient.patch<Friend>(`/split/friends/${id}`, payload);
+      return response.data!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['split', 'friends'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+/**
  * PATCH /split/friends/:id/archive
  * Arquiva ou desarquiva um amigo
  */
@@ -205,6 +266,9 @@ export function useDeleteSplitFriend() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['split', 'friends'] });
       queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -289,6 +353,10 @@ export function useCreateSplitDebts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'legacy-candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -335,6 +403,60 @@ export function useSettleSplitDebt() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'legacy-candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+/**
+ * POST /split/reimbursements/link
+ * Vincula uma transação de reembolso existente a uma ou mais dívidas em aberto
+ */
+export function useLinkReimbursementToDebts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: LinkReimbursementPayload) => {
+      const response = await apiClient.post<SplitDebt[]>(
+        '/split/reimbursements/link',
+        payload
+      );
+      return response.data!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'legacy-candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+/**
+ * POST /split/friends/:friendId/settle
+ * Quita o saldo líquido de um amigo (FIFO + compensação líquida + abono opcional)
+ */
+export function useSettleSplitFriend() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ friendId, ...body }: SettleFriendPayload) => {
+      const response = await apiClient.post<SettleFriendResponse>(
+        `/split/friends/${friendId}/settle`,
+        body
+      );
+      return response.data!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'legacy-candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -347,15 +469,19 @@ export function useSettleFriendMonth() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ friendId, month }: SettleFriendMonthPayload) => {
+    mutationFn: async ({ friendId, month, accountId }: SettleFriendMonthPayload) => {
       const response = await apiClient.post<SplitDebt[]>(
         `/split/friends/${friendId}/settle-month`,
-        { month }
+        { month, ...(accountId ? { accountId } : {}) }
       );
       return response.data!;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'legacy-candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -376,6 +502,10 @@ export function useDeleteSplitDebt() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'legacy-candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

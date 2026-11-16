@@ -23,6 +23,7 @@ export interface CategoryStats {
 export interface ListCategoriesParams {
   householdId?: string;
   type?: CategoryType;
+  includeArchived?: boolean;
 }
 
 /**

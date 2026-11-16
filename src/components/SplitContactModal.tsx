@@ -27,6 +27,7 @@ interface SplitContactModalProps {
   onRemoveGroupPhoto: () => void;
   onAddGroup: (e: React.FormEvent) => void;
   isSubmitting?: boolean;
+  isEditingFriend?: boolean;
 }
 
 const SplitContactModal: React.FC<SplitContactModalProps> = ({
@@ -52,6 +53,7 @@ const SplitContactModal: React.FC<SplitContactModalProps> = ({
   onRemoveGroupPhoto,
   onAddGroup,
   isSubmitting = false,
+  isEditingFriend = false,
 }) => {
   if (!isOpen) return null;
 
@@ -65,7 +67,11 @@ const SplitContactModal: React.FC<SplitContactModalProps> = ({
         <div className="relative w-full sm:w-[420px] max-w-md p-6 border rounded-lg bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 animate-slide-in-bottom">
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100 dark:border-gray-800">
             <h3 className="text-xl font-light tracking-tight text-gray-900 dark:text-white">
-              {activeTab === 'friend' ? 'Novo amigo' : 'Novo grupo'}
+              {isEditingFriend
+                ? 'Editar amigo'
+                : activeTab === 'friend'
+                ? 'Novo amigo'
+                : 'Novo grupo'}
             </h3>
             <button
               type="button"
@@ -76,30 +82,32 @@ const SplitContactModal: React.FC<SplitContactModalProps> = ({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mb-5">
-            <button
-              type="button"
-              onClick={() => onTabChange('friend')}
-              className={`px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
-                activeTab === 'friend'
-                  ? 'border-primary-600 bg-primary-50/50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                  : 'border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-              }`}
-            >
-              Amigo
-            </button>
-            <button
-              type="button"
-              onClick={() => onTabChange('group')}
-              className={`px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
-                activeTab === 'group'
-                  ? 'border-primary-600 bg-primary-50/50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                  : 'border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-              }`}
-            >
-              Grupo
-            </button>
-          </div>
+          {!isEditingFriend && (
+            <div className="grid grid-cols-2 gap-2 mb-5">
+              <button
+                type="button"
+                onClick={() => onTabChange('friend')}
+                className={`px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
+                  activeTab === 'friend'
+                    ? 'border-primary-600 bg-primary-50/50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                    : 'border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                }`}
+              >
+                Amigo
+              </button>
+              <button
+                type="button"
+                onClick={() => onTabChange('group')}
+                className={`px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
+                  activeTab === 'group'
+                    ? 'border-primary-600 bg-primary-50/50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                    : 'border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                }`}
+              >
+                Grupo
+              </button>
+            </div>
+          )}
 
           {activeTab === 'friend' ? (
             <form onSubmit={onAddFriend} className="space-y-4">

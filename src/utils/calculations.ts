@@ -2,6 +2,21 @@ import { startOfMonth, endOfMonth, isWithinInterval, subMonths, isBefore, isAfte
 import { Transaction, CategoryData, MonthlyComparison, RecurringTransaction, Account } from '../types';
 import { TransactionType, AccountType, CategoryName } from '../lib/enums';
 
+export const isCreditCardInvoiceTransaction = (t: Pick<Transaction, 'categoryName' | 'category'>): boolean => {
+  if (
+    t.categoryName === CategoryName.CREDIT_CARD_INVOICE ||
+    t.categoryName === 'CUSTOM:e61a55a5-d8c4-4f6a-9a9b-272d740d125c'
+  ) {
+    return true;
+  }
+  const catLower = (t.category || '').trim().toLowerCase();
+  return (
+    (catLower.includes('fatura') && (catLower.includes('cart') || catLower.includes('card'))) ||
+    catLower === 'cartão de crédito' ||
+    catLower === 'cartao de credito'
+  );
+};
+
 export const getTotalIncome = (transactions: Transaction[] | undefined): number => {
   if (!transactions || !Array.isArray(transactions)) {
     return 0;
@@ -16,7 +31,7 @@ export const getTotalExpense = (transactions: Transaction[] | undefined): number
     return 0;
   }
   return transactions
-    .filter(t => t.type === TransactionType.EXPENSE && t.categoryName !== 'TRANSFER' && t.categoryName !== CategoryName.CREDIT_CARD_INVOICE) // Excluir faturas de cartão de crédito (movimentações internas)
+    .filter(t => t.type === TransactionType.EXPENSE && t.categoryName !== 'TRANSFER' && !isCreditCardInvoiceTransaction(t)) // Excluir faturas de cartão de crédito (movimentações internas)
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 };
 
@@ -48,8 +63,13 @@ export const getTransactionsByCategory = (transactions: Transaction[] | undefine
   const categoryMap: Record<string, { receita: number; despesa: number }> = {};
   
   transactions.forEach(t => {
-    // Ignorar transferências e alocações
-    if (t.type === TransactionType.TRANSFER || t.type === TransactionType.ALLOCATION || t.categoryName === CategoryName.CREDIT_CARD_INVOICE) {
+    // Ignorar transferências, alocações e pagamentos de fatura de cartão
+    if (
+      t.type === TransactionType.TRANSFER ||
+      t.type === TransactionType.ALLOCATION ||
+      t.categoryName === CategoryName.TRANSFER ||
+      isCreditCardInvoiceTransaction(t)
+    ) {
       return;
     }
     const category = t.category || 'Sem categoria';

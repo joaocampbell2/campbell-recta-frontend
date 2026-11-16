@@ -622,8 +622,15 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (transactionId: string) => {
-      await apiClient.delete(`/transactions/${transactionId}`);
+    mutationFn: async (
+      input: string | { id: string; deleteSplitDebt?: boolean }
+    ) => {
+      const transactionId = typeof input === 'string' ? input : input.id;
+      const deleteSplitDebt =
+        typeof input === 'object' && input.deleteSplitDebt === true;
+      await apiClient.delete(
+        `/transactions/${transactionId}${deleteSplitDebt ? '?deleteSplitDebt=true' : ''}`
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -632,6 +639,7 @@ export function useDeleteTransaction() {
       queryClient.invalidateQueries({ queryKey: ['transactions', 'heatmap'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate all dashboard data
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['split', 'debts'] });
     },
   });
 }
@@ -810,6 +818,7 @@ export function usePayCreditCardInvoice() {
       description?: string;
       householdId?: string;
       categoryName?: CategoryName;
+      date?: string | Date;
     }) => {
       const response = await apiClient.post<{ success: boolean }>(
         `/transactions/credit-cards/${data.accountId}/pay-invoice`,
@@ -820,6 +829,9 @@ export function usePayCreditCardInvoice() {
           description: data.description,
           householdId: data.householdId,
           categoryName: data.categoryName || CategoryName.CREDIT_CARD_INVOICE,
+          ...(data.date && {
+            date: data.date instanceof Date ? data.date.toISOString() : data.date,
+          }),
         }
       );
       return response.data!;

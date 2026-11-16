@@ -21,7 +21,6 @@ interface SplitImportLegacyModalProps {
   importedTxIds: string[];
   onImport: (
     items: LegacyImportItem[],
-    deleteOriginals: boolean,
     hideToolAfter: boolean
   ) => void;
 }
@@ -57,7 +56,10 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
   );
   const [showReimbursementsList, setShowReimbursementsList] = useState<boolean>(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [friendByTx, setFriendByTx] = useState<Record<string, string>>({});
+  const [friendsByTx, setFriendsByTx] = useState<Record<string, string[]>>({});
+  const [amountByTxFriend, setAmountByTxFriend] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [statusByTx, setStatusByTx] = useState<Record<string, 'open' | 'reimbursed'>>({});
   const [reimbursementTxsByDebtTx, setReimbursementTxsByDebtTx] = useState<
     Record<string, string[]>
@@ -65,7 +67,6 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
   const [openDropdownTxId, setOpenDropdownTxId] = useState<string | null>(null);
   const [manualPaidDateByTx, setManualPaidDateByTx] = useState<Record<string, string>>({});
   const [forgiveRemainderByTx, setForgiveRemainderByTx] = useState<Record<string, boolean>>({});
-  const [deleteOriginals, setDeleteOriginals] = useState<boolean>(false);
   const [hideToolAfter, setHideToolAfter] = useState<boolean>(false);
 
   const allCandidates = useMemo<CandidateTx[]>(() => {
@@ -173,24 +174,48 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
     return list.sort((a, b) => b.date.localeCompare(a.date));
   }, [allCandidates, filterMode]);
 
+  const buildEqualAmountsMap = (
+    totalAmount: number,
+    friendIds: string[]
+  ): Record<string, string> => {
+    const result: Record<string, string> = {};
+    if (friendIds.length === 0) return result;
+    const totalCents = Math.round(totalAmount * 100);
+    const baseCents = Math.floor(totalCents / friendIds.length);
+    let remainderCents = totalCents - baseCents * friendIds.length;
+    friendIds.forEach((fId) => {
+      const extra = remainderCents > 0 ? 1 : 0;
+      if (remainderCents > 0) remainderCents -= 1;
+      result[fId] = ((baseCents + extra) / 100).toFixed(2);
+    });
+    return result;
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     const defaultFriendId = friends[0]?.id || '';
-    const nextFriendMap: Record<string, string> = {};
+    const nextFriendsMap: Record<string, string[]> = {};
+    const nextAmountsMap: Record<string, Record<string, string>> = {};
     const nextStatusMap: Record<string, 'open' | 'reimbursed'> = {};
     const nextReimbMap: Record<string, string[]> = {};
     const nextManualDateMap: Record<string, string> = {};
 
     debtCandidates.forEach((tx) => {
-      const matchedFriend = friends.find((f) =>
-        tx.description
-          .toLowerCase()
-          .includes(f.name.split(' ')[0].toLowerCase())
+      const descLower = tx.description.toLowerCase();
+      const matchedFriends = friends.filter((f) =>
+        descLower.includes(f.name.split(' ')[0].toLowerCase())
       );
-      nextFriendMap[tx.id] = matchedFriend?.id || defaultFriendId;
+      const selectedFriendIds =
+        matchedFriends.length > 0
+          ? matchedFriends.map((f) => f.id)
+          : defaultFriendId
+          ? [defaultFriendId]
+          : [];
+      nextFriendsMap[tx.id] = selectedFriendIds;
+      nextAmountsMap[tx.id] = buildEqualAmountsMap(tx.amount, selectedFriendIds);
       nextManualDateMap[tx.id] = tx.date;
 
-      const firstWordFriend = matchedFriend?.name.split(' ')[0].toLowerCase();
+      const firstWordFriend = matchedFriends[0]?.name.split(' ')[0].toLowerCase();
       const exactReimb = reimbursementCandidates.find(
         (r) => Math.abs(r.amount - tx.amount) < 0.01
       );
@@ -212,7 +237,8 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
       }
     });
 
-    setFriendByTx((prev) => ({ ...nextFriendMap, ...prev }));
+    setFriendsByTx((prev) => ({ ...nextFriendsMap, ...prev }));
+    setAmountByTxFriend((prev) => ({ ...nextAmountsMap, ...prev }));
     setStatusByTx((prev) => ({ ...nextStatusMap, ...prev }));
     setReimbursementTxsByDebtTx((prev) => ({ ...nextReimbMap, ...prev }));
     setManualPaidDateByTx((prev) => ({ ...nextManualDateMap, ...prev }));
@@ -224,6 +250,22 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
+  };
+
+  const toggleFriendForTx = (tx: CandidateTx, friendId: string) => {
+    const current = friendsByTx[tx.id] || (friends[0]?.id ? [friends[0].id] : []);
+    const exists = current.includes(friendId);
+    // Garante pelo menos 1 amigo selecionado
+    if (exists && current.length <= 1) return;
+    const next = exists
+      ? current.filter((id) => id !== friendId)
+      : [...current, friendId];
+
+    setFriendsByTx((prev) => ({ ...prev, [tx.id]: next }));
+    setAmountByTxFriend((prev) => ({
+      ...prev,
+      [tx.id]: buildEqualAmountsMap(tx.amount, next),
+    }));
   };
 
   const toggleReimbursementForDebt = (debtTxId: string, reimbTxId: string) => {
@@ -250,41 +292,78 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
 
   const handleConfirm = (e: React.FormEvent) => {
     e.preventDefault();
-    const items: LegacyImportItem[] = selectedIds
-      .map((txId): LegacyImportItem | null => {
-        const tx = debtCandidates.find((c) => c.id === txId);
-        const friendId = friendByTx[txId] || friends[0]?.id;
-        if (!tx || !friendId) return null;
+    const items: LegacyImportItem[] = [];
 
-        const isPaid = statusByTx[txId] === 'reimbursed';
-        const reimbIds = isPaid ? reimbursementTxsByDebtTx[txId] || [] : [];
-        const selectedReimbs = reimbIds
-          .map((id) => reimbursementCandidates.find((r) => r.id === id))
-          .filter((r): r is CandidateTx => Boolean(r))
-          .sort((a, b) => a.date.localeCompare(b.date));
+    selectedIds.forEach((txId) => {
+      const tx = debtCandidates.find((c) => c.id === txId);
+      if (!tx) return;
 
-        const totalReimbAmount = selectedReimbs.reduce((s, r) => s + r.amount, 0);
-        const paidAmount = isPaid
-          ? selectedReimbs.length > 0
-            ? Number(totalReimbAmount.toFixed(2))
-            : tx.amount
+      const selectedFriendIds =
+        friendsByTx[txId] && friendsByTx[txId].length > 0
+          ? friendsByTx[txId]
+          : friends[0]?.id
+          ? [friends[0].id]
+          : [];
+      if (selectedFriendIds.length === 0) return;
+
+      const isPaid = statusByTx[txId] === 'reimbursed';
+      const reimbIds = isPaid ? reimbursementTxsByDebtTx[txId] || [] : [];
+      const selectedReimbs = reimbIds
+        .map((id) => reimbursementCandidates.find((r) => r.id === id))
+        .filter((r): r is CandidateTx => Boolean(r))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      const totalReimbAmount = selectedReimbs.reduce((s, r) => s + r.amount, 0);
+      const latestReimbDate =
+        selectedReimbs.length > 0
+          ? selectedReimbs[selectedReimbs.length - 1].date
           : undefined;
 
-        const latestReimbDate =
-          selectedReimbs.length > 0
-            ? selectedReimbs[selectedReimbs.length - 1].date
-            : undefined;
+      const paidAt = isPaid
+        ? latestReimbDate || manualPaidDateByTx[txId] || tx.date
+        : undefined;
 
-        const paidAt = isPaid
-          ? latestReimbDate || manualPaidDateByTx[txId] || tx.date
-          : undefined;
+      const customAmounts = amountByTxFriend[txId] || {};
+      const equalAmounts = buildEqualAmountsMap(tx.amount, selectedFriendIds);
+      const totalAllocated = selectedFriendIds.reduce((sum, fId) => {
+        const parsed = parseFloat(customAmounts[fId] ?? equalAmounts[fId] ?? '0');
+        return sum + (Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+      }, 0);
 
-        return {
+      selectedFriendIds.forEach((friendId, idx) => {
+        const rawFriendAmt = parseFloat(
+          customAmounts[friendId] ?? equalAmounts[friendId] ?? '0'
+        );
+        const friendAmount =
+          selectedFriendIds.length === 1
+            ? tx.amount
+            : Number.isFinite(rawFriendAmt) && rawFriendAmt > 0
+            ? Number(rawFriendAmt.toFixed(2))
+            : Number((tx.amount / selectedFriendIds.length).toFixed(2));
+
+        let friendPaidAmount: number | undefined = undefined;
+        if (isPaid) {
+          if (selectedReimbs.length > 0) {
+            if (selectedFriendIds.length === 1) {
+              friendPaidAmount = Number(totalReimbAmount.toFixed(2));
+            } else {
+              const ratio = totalAllocated > 0 ? friendAmount / totalAllocated : 1 / selectedFriendIds.length;
+              friendPaidAmount = Number((totalReimbAmount * ratio).toFixed(2));
+            }
+          } else {
+            friendPaidAmount = friendAmount;
+          }
+        }
+
+        const isFirstFriend = idx === 0;
+
+        items.push({
           transactionId: tx.id,
-          reimbursementTransactionId: reimbIds[0] || undefined,
-          reimbursementTransactionIds: reimbIds.length > 0 ? reimbIds : undefined,
+          reimbursementTransactionId: isFirstFriend ? reimbIds[0] || undefined : undefined,
+          reimbursementTransactionIds:
+            isFirstFriend && reimbIds.length > 0 ? reimbIds : undefined,
           reimbursements:
-            selectedReimbs.length > 0
+            isFirstFriend && selectedReimbs.length > 0
               ? selectedReimbs.map((r) => ({
                   id: r.id,
                   description: r.description,
@@ -294,20 +373,22 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
               : undefined,
           friendId,
           description: tx.description.trim(),
-          amount: tx.amount,
+          amount: friendAmount,
           date: tx.date, // Mantém a data original da dívida!
           accountId: tx.accountId,
           accountName: tx.accountName,
           paid: isPaid,
-          paidAmount,
+          paidAmount: friendPaidAmount,
           paidAt, // Mantém a data original do reembolso!
-          forgiveRemainder: Boolean(forgiveRemainderByTx[txId]),
-        };
-      })
-      .filter((item): item is LegacyImportItem => item !== null);
+          forgiveRemainder: isFirstFriend
+            ? Boolean(forgiveRemainderByTx[txId])
+            : false,
+        });
+      });
+    });
 
     if (items.length === 0) return;
-    onImport(items, deleteOriginals, hideToolAfter);
+    onImport(items, hideToolAfter);
     setSelectedIds([]);
     onClose();
   };
@@ -504,29 +585,133 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
                         </span>
                       </div>
 
-                      {isChecked && (
+                      {isChecked && (() => {
+                        const selectedFriendsForTx =
+                          friendsByTx[tx.id] && friendsByTx[tx.id].length > 0
+                            ? friendsByTx[tx.id]
+                            : friends[0]?.id
+                            ? [friends[0].id]
+                            : [];
+                        const customAmounts = amountByTxFriend[tx.id] || {};
+                        const equalAmounts = buildEqualAmountsMap(
+                          tx.amount,
+                          selectedFriendsForTx
+                        );
+                        const allocatedSum = selectedFriendsForTx.reduce((s, fId) => {
+                          const v = parseFloat(
+                            customAmounts[fId] ?? equalAmounts[fId] ?? '0'
+                          );
+                          return s + (Number.isFinite(v) ? v : 0);
+                        }, 0);
+
+                        return (
                         <div className="pl-7 space-y-2.5 pt-1">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="space-y-2">
                             <div>
-                              <label className="block text-[11px] font-light text-gray-400 mb-1">
-                                Amigo
-                              </label>
-                              <select
-                                value={friendByTx[tx.id] || ''}
-                                onChange={(e) =>
-                                  setFriendByTx((prev) => ({
-                                    ...prev,
-                                    [tx.id]: e.target.value,
-                                  }))
-                                }
-                                className="w-full px-2.5 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                              >
-                                {friends.map((f) => (
-                                  <option key={f.id} value={f.id}>
-                                    {f.name}
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-[11px] font-light text-gray-400">
+                                  Amigos que devem (selecione 1 ou mais)
+                                </label>
+                                {selectedFriendsForTx.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setAmountByTxFriend((prev) => ({
+                                        ...prev,
+                                        [tx.id]: buildEqualAmountsMap(
+                                          tx.amount,
+                                          selectedFriendsForTx
+                                        ),
+                                      }))
+                                    }
+                                    className="text-[11px] font-light text-primary-600 dark:text-primary-400 hover:underline"
+                                  >
+                                    Dividir igual
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5">
+                                {friends.map((f) => {
+                                  const isFriendSelected =
+                                    selectedFriendsForTx.includes(f.id);
+                                  return (
+                                    <button
+                                      key={f.id}
+                                      type="button"
+                                      onClick={() => toggleFriendForTx(tx, f.id)}
+                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                                        isFriendSelected
+                                          ? 'border-primary-600 dark:border-primary-400 bg-primary-50/40 dark:bg-primary-950/30 text-primary-700 dark:text-primary-300 font-medium'
+                                          : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'
+                                      }`}
+                                    >
+                                      {isFriendSelected && (
+                                        <Check className="w-3 h-3 flex-shrink-0" />
+                                      )}
+                                      <span>{f.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {selectedFriendsForTx.length > 1 && (
+                                <div className="mt-2 p-2.5 rounded border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 space-y-1.5">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {selectedFriendsForTx.map((fId) => {
+                                      const friendObj = friends.find(
+                                        (fr) => fr.id === fId
+                                      );
+                                      if (!friendObj) return null;
+                                      const val =
+                                        customAmounts[fId] ??
+                                        equalAmounts[fId] ??
+                                        '0.00';
+                                      return (
+                                        <div
+                                          key={fId}
+                                          className="flex items-center justify-between gap-2"
+                                        >
+                                          <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                                            {friendObj.name}
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            value={val}
+                                            onChange={(e) =>
+                                              setAmountByTxFriend((prev) => ({
+                                                ...prev,
+                                                [tx.id]: {
+                                                  ...(prev[tx.id] || equalAmounts),
+                                                  [fId]: e.target.value,
+                                                },
+                                              }))
+                                            }
+                                            className="w-24 px-2 py-1 text-xs text-right rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800 text-[11px]">
+                                    <span className="text-gray-400">
+                                      Soma das partes:
+                                    </span>
+                                    <span
+                                      className={`font-medium ${
+                                        Math.abs(allocatedSum - tx.amount) < 0.02
+                                          ? 'text-emerald-600 dark:text-emerald-400'
+                                          : 'text-amber-600 dark:text-amber-400'
+                                      }`}
+                                    >
+                                      {formatCurrency(allocatedSum, baseCurrency)} /{' '}
+                                      {formatCurrency(tx.amount, baseCurrency)}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             <div>
@@ -541,7 +726,7 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
                                     [tx.id]: e.target.value as 'open' | 'reimbursed',
                                   }))
                                 }
-                                className="w-full px-2.5 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                className="w-full sm:w-64 px-2.5 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                               >
                                 <option value="open">Não (Ainda me deve)</option>
                                 <option value="reimbursed">
@@ -753,7 +938,8 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
                             </div>
                           )}
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   );
                 })
@@ -761,16 +947,6 @@ const SplitImportLegacyModal: React.FC<SplitImportLegacyModalProps> = ({
             </div>
 
             <div className="space-y-2 pt-1">
-              <label className="flex items-center gap-2 text-xs font-light text-gray-600 dark:text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={deleteOriginals}
-                  onChange={(e) => setDeleteOriginals(e.target.checked)}
-                  className="rounded border-gray-300 dark:border-gray-700"
-                />
-                Remover as transações antigas de Dívida/Reembolso do extrato após converter
-              </label>
-
               <label className="flex items-center gap-2 text-xs font-light text-gray-500 dark:text-gray-400 cursor-pointer">
                 <input
                   type="checkbox"

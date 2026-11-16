@@ -28,6 +28,8 @@ export interface Transaction {
   totalInstallments?: number;
   attachmentUrl?: string;
   notes?: string;
+  splitDebtId?: string | null;
+  splitSettlementId?: string | null;
 }
 
 export interface Category {
@@ -144,7 +146,7 @@ export interface TransactionsContextType {
   loading: boolean;
   addTransaction: (transaction: Omit<Transaction, 'id' | 'userId'>) => Promise<void>;
   updateTransaction: (id: string, transaction: Partial<Transaction>) => Promise<void>;
-  deleteTransaction: (id: string) => Promise<void>;
+  deleteTransaction: (id: string, options?: { deleteSplitDebt?: boolean }) => Promise<void>;
   addCategory: (category: Omit<Category, 'id' | 'userId'>) => Promise<void>;
   updateCategory: (id: string, category: Partial<Category>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;

@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useTransactions } from "../context/TransactionsContext";
 import { useI18n } from "../context/I18nContext";
@@ -70,10 +71,20 @@ const CreditCards = () => {
   const payInvoiceMutation = usePayCreditCardInvoice();
   const undoPaymentMutation = useUndoCreditCardPayment();
 
+  const [searchParams] = useSearchParams();
+  const paramAccountId = searchParams.get("accountId");
+  const paramMonth = searchParams.get("month");
+
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
-    null
+    paramAccountId
   );
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    if (paramMonth && /^\d{4}-\d{2}$/.test(paramMonth)) {
+      const [y, m] = paramMonth.split("-").map(Number);
+      return new Date(y, m - 1, 1);
+    }
+    return new Date();
+  });
   
   // Format month for API: "YYYY-MM"
   const selectedMonthKey = format(selectedMonth, "yyyy-MM");
@@ -105,6 +116,7 @@ const CreditCards = () => {
   const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
     isOpen: boolean;
     transactionId: string | null;
+    hasSplitLink?: boolean;
   }>({
     isOpen: false,
     transactionId: null,
@@ -149,12 +161,21 @@ const CreditCards = () => {
     return accounts.filter((account) => account.type === AccountType.CREDIT || account.type === "CREDIT");
   }, [accounts]);
 
-  // Selecionar o primeiro cartão se nenhum estiver selecionado
+  // Sincronizar cartão e mês se vierem por query param ou selecionar o primeiro cartão
   useEffect(() => {
-    if (creditCards.length > 0 && !selectedAccountId) {
+    if (paramAccountId && creditCards.some((c) => c.id === paramAccountId)) {
+      setSelectedAccountId(paramAccountId);
+    } else if (creditCards.length > 0 && !selectedAccountId) {
       setSelectedAccountId(creditCards[0].id || null);
     }
-  }, [creditCards, selectedAccountId]);
+  }, [creditCards, selectedAccountId, paramAccountId]);
+
+  useEffect(() => {
+    if (paramMonth && /^\d{4}-\d{2}$/.test(paramMonth)) {
+      const [y, m] = paramMonth.split("-").map(Number);
+      setSelectedMonth(new Date(y, m - 1, 1));
+    }
+  }, [paramMonth]);
 
   const selectedAccount = useMemo(() => {
     return creditCards.find((acc) => acc.id === selectedAccountId);
@@ -463,6 +484,9 @@ const CreditCards = () => {
       setConfirmDeleteModal({
         isOpen: true,
         transactionId: transaction.id || null,
+        hasSplitLink: Boolean(
+          transaction.splitDebtId || transaction.splitSettlementId
+        ),
       });
     }
   };
@@ -471,7 +495,9 @@ const CreditCards = () => {
     if (!confirmDeleteModal.transactionId) return;
 
     try {
-      await deleteTransaction(confirmDeleteModal.transactionId);
+      await deleteTransaction(confirmDeleteModal.transactionId, {
+        deleteSplitDebt: confirmDeleteModal.hasSplitLink,
+      });
       success(t.transactionDeleted);
       setConfirmDeleteModal({ isOpen: false, transactionId: null });
     } catch (err: unknown) {
@@ -486,7 +512,10 @@ const CreditCards = () => {
     if (!transaction || !transaction.id) return;
 
     try {
-      await deleteTransaction(transaction.id);
+      const hasSplitLink = Boolean(
+        transaction.splitDebtId || transaction.splitSettlementId
+      );
+      await deleteTransaction(transaction.id, { deleteSplitDebt: hasSplitLink });
       success(t.transactionDeleted);
     } catch (err: unknown) {
       const message =
@@ -1255,11 +1284,18 @@ const CreditCards = () => {
           setConfirmDeleteModal({ isOpen: false, transactionId: null })
         }
         onConfirm={handleConfirmDelete}
-        title={t.delete}
-        message={
-          t.confirmDeleteTransaction ||
-          "Tem certeza que deseja excluir esta transação?"
+        title={
+          confirmDeleteModal.hasSplitLink
+            ? 'Excluir transação e dívida vinculada'
+            : t.delete
         }
+        message={
+          confirmDeleteModal.hasSplitLink
+            ? 'Esta transação pertence a uma dívida/acerto do módulo Divisão de Contas. Ao confirmar, a transação e a dívida vinculada serão excluídas juntas.'
+            : t.confirmDeleteTransaction ||
+              "Tem certeza que deseja excluir esta transação?"
+        }
+        confirmText={confirmDeleteModal.hasSplitLink ? 'Excluir ambos' : undefined}
         variant="danger"
       />
 

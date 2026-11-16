@@ -10,7 +10,8 @@ import { useCurrency } from '../context/CurrencyContext';
 import { formatCurrency } from '../utils/format';
 import { Transaction } from '../types';
 import { createSchemas, TransactionFormData } from '../schemas';
-import { CategoryType, CategoryName, getCategoriesByType, getCategoryNameFromDisplay, AccountType, TransactionType } from '../lib/enums';
+import { CategoryType, CategoryName, getCategoriesByType, getCategoryNameFromDisplay, AccountType, TransactionType, CUSTOM_CATEGORY_PREFIX } from '../lib/enums';
+import { useCategories } from '../hooks/api/useCategories';
 import { getAvailableBalance } from '../utils/accountBalance';
 import { useDefaultHousehold } from '../hooks/useDefaultHousehold';
 import { useAvailableAccounts, useAccounts, type Account as AccountWithPersonal } from '../hooks/api/useAccounts';
@@ -27,8 +28,10 @@ import {
   InstallmentsField,
   TransactionModalFooter,
   AccountField,
+  CreditCardInvoicePaymentSection,
 } from './transactions';
 import SplitDebtWizardModal from './SplitDebtWizardModal';
+import { ImportCsvModal } from './ImportCsvModal';
 
 interface TransactionModalProps {
   transaction: Transaction | null;
@@ -92,6 +95,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
   // Estado para controlar se é recorrente
   const [isRecurring, setIsRecurring] = useState(false);
   const [isSplitDebtMode, setIsSplitDebtMode] = useState(false);
+  const [isImportCsvOpen, setIsImportCsvOpen] = useState(false);
 
   // Estados para campos de recorrência
   const [recurringFrequency, setRecurringFrequency] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'>('monthly');
@@ -112,6 +116,10 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
 
   // Buscar membros da household (para splits)
   const { data: householdMembers } = useHouseholdMembers(householdId || '');
+  const { data: expenseCategoriesData = [] } = useCategories({
+    householdId: householdId || undefined,
+    type: CategoryType.EXPENSE,
+  });
 
 
   const isResettingRef = useRef(false);
@@ -950,6 +958,7 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
             title={readOnly ? t.viewDetails : (transaction ? t.editTransaction : t.newTransaction)}
             onClose={onClose}
             readOnly={readOnly}
+            onImportCsv={!transaction && !readOnly ? () => setIsImportCsvOpen(true) : undefined}
           />
 
           {!transaction && !readOnly && (
@@ -991,120 +1000,171 @@ const TransactionModal = ({ transaction, onClose, defaultAccountId, defaultPaid,
               />
             )}
 
-            <TransactionBasicFields
-              control={control}
-              register={register}
-              watch={watch}
-              setValue={setValue}
-              errors={errors}
-              transactionType={transactionType}
-              accounts={accounts}
-              currencyMask={currencyMask}
-              isCreditCardContext={isCreditCardContext}
-              disabled={readOnly}
-              householdId={householdId ?? undefined}
-            />
+            {(() => {
+              const selectedCategory = watch('category') || '';
+              const isDefaultInvoiceCategory =
+                selectedCategory === CategoryName.CREDIT_CARD_INVOICE;
+              const matchedCustomCat =
+                selectedCategory.startsWith(CUSTOM_CATEGORY_PREFIX)
+                  ? expenseCategoriesData.find(
+                      (c) => `${CUSTOM_CATEGORY_PREFIX}${c.id}` === selectedCategory
+                    )
+                  : undefined;
+              const customNameLower = (matchedCustomCat?.name || '').toLowerCase();
+              const isCustomCreditCardCat =
+                Boolean(matchedCustomCat) &&
+                ((customNameLower.includes('fatura') &&
+                  (customNameLower.includes('cart') || customNameLower.includes('card'))) ||
+                  customNameLower === 'cartão de crédito' ||
+                  customNameLower === 'cartao de credito');
 
-            {transactionType === TransactionType.EXPENSE && isSharedHousehold && householdMembers && householdMembers.length > 1 && !readOnly && (
-              <SplitTransactionForm
-                isSplit={isSplit}
-                onSplitChange={(newIsSplit) => {
-                  setIsSplit(newIsSplit);
-                  if (!newIsSplit) {
-                    setSplits([]);
-                    hasAutoSplit.current = false;
-                    lastMemberCount.current = 0;
-                  }
-                }}
-                splits={splits}
-                onSplitsChange={setSplits}
-                transactionAmount={transactionAmount}
-                householdMembers={householdMembers}
-                accounts={accounts as AccountWithPersonal[]}
-                splitBalanceErrors={splitBalanceErrors}
-                getDefaultAccountIdForMember={getDefaultAccountIdForMember}
-                disabled={readOnly}
-                currentUser={currentUser}
-                authUser={authUser}
-              />
-            )}
+              const isCreditCardInvoiceCategory =
+                !transaction &&
+                !isCreditCardContext &&
+                transactionType === TransactionType.EXPENSE &&
+                (isDefaultInvoiceCategory || isCustomCreditCardCat);
 
-            {transactionType !== TransactionType.TRANSFER && !isSplit && (
-              <AccountField
-                control={control}
-                watch={watch}
-                errors={errors}
-                availableAccounts={availableAccounts as AccountWithPersonal[]}
-                isCreditCardContext={isCreditCardContext}
-                hasNoAccountsAvailable={hasNoAccountsAvailable}
-                authUser={authUser}
-                disabled={readOnly}
-              />
-            )}
-
-            {!transaction && transactionType !== TransactionType.TRANSFER && isSelectedAccountCreditCard && (
-              <>
-                <InstallmentsField
-                  register={register}
-                  errors={errors}
-                  disabled={readOnly}
-                />
-
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="isRecurring"
-                    checked={isRecurring}
-                    onChange={(e) => {
-                      if (!readOnly) {
-                        setIsRecurring(e.target.checked);
-                        if (e.target.checked) {
-                          const selectedDate = watch('date') || new Date();
-                          setRecurringStartDate(selectedDate);
-                          setRecurringNextDueDate(calculateNextDueDate(selectedDate, recurringFrequency));
-                        }
-                      }
-                    }}
+              return (
+                <>
+                  <TransactionBasicFields
+                    control={control}
+                    register={register}
+                    watch={watch}
+                    setValue={setValue}
+                    errors={errors}
+                    transactionType={transactionType}
+                    accounts={accounts}
+                    currencyMask={currencyMask}
+                    isCreditCardContext={isCreditCardContext}
                     disabled={readOnly}
-                    className={`h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded ${readOnly ? 'cursor-not-allowed opacity-60' : ''}`}
+                    householdId={householdId ?? undefined}
+                    categoryOnly={isCreditCardInvoiceCategory}
                   />
-                  <label htmlFor="isRecurring" className="ml-2 block text-sm text-gray-900 dark:text-gray-100 cursor-pointer">
-                    {t.recurring}
-                  </label>
-                </div>
 
-                <RecurringTransactionFields
-                  isRecurring={isRecurring}
-                  frequency={recurringFrequency}
-                  startDate={recurringStartDate}
-                  endDate={recurringEndDate}
-                  nextDueDate={recurringNextDueDate}
-                  onFrequencyChange={(freq) => {
-                    setRecurringFrequency(freq);
-                  }}
-                  onStartDateChange={(date) => {
-                    setRecurringStartDate(date);
-                  }}
-                  onEndDateChange={(date) => setRecurringEndDate(date)}
-                  onNextDueDateChange={(date) => setRecurringNextDueDate(date)}
-                  disabled={readOnly}
-                />
-              </>
-            )}
+                  {isCreditCardInvoiceCategory ? (
+                    <CreditCardInvoicePaymentSection
+                      accounts={accounts}
+                      householdId={householdId ?? undefined}
+                      onClose={onClose}
+                      selectedCategoryValue={selectedCategory}
+                    />
+                  ) : (
+                    <>
+                      {transactionType === TransactionType.EXPENSE && isSharedHousehold && householdMembers && householdMembers.length > 1 && !readOnly && (
+                        <SplitTransactionForm
+                          isSplit={isSplit}
+                          onSplitChange={(newIsSplit) => {
+                            setIsSplit(newIsSplit);
+                            if (!newIsSplit) {
+                              setSplits([]);
+                              hasAutoSplit.current = false;
+                              lastMemberCount.current = 0;
+                            }
+                          }}
+                          splits={splits}
+                          onSplitsChange={setSplits}
+                          transactionAmount={transactionAmount}
+                          householdMembers={householdMembers}
+                          accounts={accounts as AccountWithPersonal[]}
+                          splitBalanceErrors={splitBalanceErrors}
+                          getDefaultAccountIdForMember={getDefaultAccountIdForMember}
+                          disabled={readOnly}
+                          currentUser={currentUser}
+                          authUser={authUser}
+                        />
+                      )}
 
-            <TransactionModalFooter
-              readOnly={readOnly}
-              onClose={onClose}
-              isSubmitting={isSubmitting}
-              hasErrors={isSplit && Object.keys(splitBalanceErrors).length > 0}
-              isUpdate={!!transaction}
-              onSaveAndCreateNew={!transaction ? () => {
-                handleSubmit((data) => onSubmit(data, true))();
-              } : undefined}
-            />
+                      {transactionType !== TransactionType.TRANSFER && !isSplit && (
+                        <AccountField
+                          control={control}
+                          watch={watch}
+                          errors={errors}
+                          availableAccounts={availableAccounts as AccountWithPersonal[]}
+                          isCreditCardContext={isCreditCardContext}
+                          hasNoAccountsAvailable={hasNoAccountsAvailable}
+                          authUser={authUser}
+                          disabled={readOnly}
+                        />
+                      )}
+
+                      {!transaction && transactionType !== TransactionType.TRANSFER && isSelectedAccountCreditCard && (
+                        <>
+                          <InstallmentsField
+                            register={register}
+                            errors={errors}
+                            disabled={readOnly}
+                          />
+
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="isRecurring"
+                              checked={isRecurring}
+                              onChange={(e) => {
+                                if (!readOnly) {
+                                  setIsRecurring(e.target.checked);
+                                  if (e.target.checked) {
+                                    const selectedDate = watch('date') || new Date();
+                                    setRecurringStartDate(selectedDate);
+                                    setRecurringNextDueDate(calculateNextDueDate(selectedDate, recurringFrequency));
+                                  }
+                                }
+                              }}
+                              disabled={readOnly}
+                              className={`h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded ${readOnly ? 'cursor-not-allowed opacity-60' : ''}`}
+                            />
+                            <label htmlFor="isRecurring" className="ml-2 block text-sm text-gray-900 dark:text-gray-100 cursor-pointer">
+                              {t.recurring}
+                            </label>
+                          </div>
+
+                          <RecurringTransactionFields
+                            isRecurring={isRecurring}
+                            frequency={recurringFrequency}
+                            startDate={recurringStartDate}
+                            endDate={recurringEndDate}
+                            nextDueDate={recurringNextDueDate}
+                            onFrequencyChange={(freq) => {
+                              setRecurringFrequency(freq);
+                            }}
+                            onStartDateChange={(date) => {
+                              setRecurringStartDate(date);
+                            }}
+                            onEndDateChange={(date) => setRecurringEndDate(date)}
+                            onNextDueDateChange={(date) => setRecurringNextDueDate(date)}
+                            disabled={readOnly}
+                          />
+                        </>
+                      )}
+
+                      <TransactionModalFooter
+                        readOnly={readOnly}
+                        onClose={onClose}
+                        isSubmitting={isSubmitting}
+                        hasErrors={isSplit && Object.keys(splitBalanceErrors).length > 0}
+                        isUpdate={!!transaction}
+                        onSaveAndCreateNew={!transaction ? () => {
+                          handleSubmit((data) => onSubmit(data, true))();
+                        } : undefined}
+                      />
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </form>
         </div>
       </div>
+
+      {isImportCsvOpen && (
+        <ImportCsvModal
+          isOpen={isImportCsvOpen}
+          onClose={() => setIsImportCsvOpen(false)}
+          accounts={accounts}
+          householdId={householdId ?? undefined}
+          defaultAccountId={defaultAccountId}
+        />
+      )}
     </div>,
     document.body
   );

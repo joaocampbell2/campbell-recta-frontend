@@ -78,6 +78,11 @@ export function getMergedCategories(
     color: c.color ?? undefined,
     icon: c.icon ?? undefined,
   }));
-  return [...system, ...customOpts];
+  const seenValues = new Set<string>();
+  return [...customOpts, ...system].filter((opt) => {
+    if (seenValues.has(opt.value)) return false;
+    seenValues.add(opt.value);
+    return true;
+  });
 }
 

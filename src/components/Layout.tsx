@@ -22,12 +22,14 @@ import {
   Receipt,
   FlaskConical,
   Loader2,
+  Check,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import MobileBanner from "./MobileBanner";
 import { OnboardingModal } from "./OnboardingModal";
 import { VerificationModal } from "./VerificationModal";
 import { FeedbackModal } from "./FeedbackModal";
+import ConfirmModal from "./ConfirmModal";
 import { useUser, useUpdateUserPreferences } from "../hooks/api/useUsers";
 import { useCommandMenu } from "../context/CommandMenuContext";
 import { useTestMode } from "../context/TestModeContext";
@@ -45,7 +47,17 @@ interface NavItem {
 const Layout = () => {
   const { logout, currentUser } = useAuth();
   const { t } = useI18n();
-  const { isTestMode, isStopping, stopTestMode } = useTestMode();
+  const {
+    isTestMode,
+    isStopping,
+    isApplying,
+    isApplyModalOpen,
+    originalHousehold,
+    stopTestMode,
+    applyTestMode,
+    openApplyModal,
+    closeApplyModal,
+  } = useTestMode();
   const { setDisabled: setCommandMenuDisabled, registerHandler, unregisterHandler } = useCommandMenu();
   const location = useLocation();
   const navigate = useNavigate();
@@ -341,14 +353,28 @@ const Layout = () => {
                 Modo Teste ativo — nada será salvo permanentemente
               </span>
             </div>
-            <button
-              onClick={stopTestMode}
-              disabled={isStopping}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs sm:text-sm font-medium bg-white text-amber-700 hover:bg-amber-50 disabled:opacity-60 transition-colors flex-shrink-0"
-            >
-              {isStopping && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-              {isStopping ? "Restaurando..." : "Encerrar teste"}
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={openApplyModal}
+                disabled={isStopping || isApplying}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs sm:text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60 transition-colors"
+              >
+                {isApplying ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                {isApplying ? "Aplicando..." : "Aplicar alterações"}
+              </button>
+              <button
+                onClick={stopTestMode}
+                disabled={isStopping || isApplying}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs sm:text-sm font-medium bg-white text-amber-700 hover:bg-amber-50 disabled:opacity-60 transition-colors"
+              >
+                {isStopping && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+                {isStopping ? "Restaurando..." : "Encerrar teste"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -424,6 +450,19 @@ const Layout = () => {
         isOpen={!!selectedInviteId}
         onClose={() => setSelectedInviteId(null)}
         selectedInviteId={selectedInviteId}
+      />
+
+      {/* Apply Test Mode Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isApplyModalOpen}
+        onClose={closeApplyModal}
+        onConfirm={applyTestMode}
+        title="Aplicar alterações do modo teste?"
+        message={`Todas as alterações feitas no sandbox serão aplicadas permanentemente ao ambiente "${originalHousehold?.name || 'original'}". Essa ação substituirá os dados atuais desse ambiente e encerrará o modo teste.`}
+        confirmText="Aplicar tudo"
+        cancelText="Cancelar"
+        variant="warning"
+        isLoading={isApplying}
       />
     </div>
   );

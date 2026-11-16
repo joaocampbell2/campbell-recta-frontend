@@ -24,8 +24,13 @@ interface TestModeContextType {
   originalHousehold: TestModeOriginalHousehold | null;
   isStarting: boolean;
   isStopping: boolean;
+  isApplying: boolean;
+  isApplyModalOpen: boolean;
   startTestMode: () => Promise<void>;
   stopTestMode: () => Promise<void>;
+  applyTestMode: () => Promise<void>;
+  openApplyModal: () => void;
+  closeApplyModal: () => void;
 }
 
 const TestModeContext = createContext<TestModeContextType>({} as TestModeContextType);
@@ -53,6 +58,8 @@ export const TestModeProvider: React.FC<{ children: ReactNode }> = ({ children }
   );
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
 
   // Sync with localStorage changes across tabs and same-tab events
   useEffect(() => {
@@ -160,6 +167,21 @@ export const TestModeProvider: React.FC<{ children: ReactNode }> = ({ children }
     showError,
   ]);
 
+  const restoreOriginalHouseholdState = useCallback(
+    (activeState: TestModeState) => {
+      saveHouseholdToLocalStorage(
+        activeState.originalHousehold.id,
+        activeState.originalHousehold.name,
+        activeState.originalHousehold.role
+      );
+      clearTestModeFromLocalStorage();
+      setTestModeState(null);
+      setIsApplyModalOpen(false);
+      refreshHouseholdQueries();
+    },
+    [refreshHouseholdQueries]
+  );
+
   const stopTestMode = useCallback(async () => {
     const activeState = testModeState ?? loadTestModeFromLocalStorage();
     if (!activeState?.active) {
@@ -180,14 +202,7 @@ export const TestModeProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
       }
 
-      saveHouseholdToLocalStorage(
-        activeState.originalHousehold.id,
-        activeState.originalHousehold.name,
-        activeState.originalHousehold.role
-      );
-      clearTestModeFromLocalStorage();
-      setTestModeState(null);
-      refreshHouseholdQueries();
+      restoreOriginalHouseholdState(activeState);
       success('Modo teste encerrado! Dados originais restaurados.');
     } catch (err: unknown) {
       const message =
@@ -196,7 +211,41 @@ export const TestModeProvider: React.FC<{ children: ReactNode }> = ({ children }
     } finally {
       setIsStopping(false);
     }
-  }, [testModeState, refreshHouseholdQueries, success, showError]);
+  }, [testModeState, restoreOriginalHouseholdState, success, showError]);
+
+  const applyTestMode = useCallback(async () => {
+    const activeState = testModeState ?? loadTestModeFromLocalStorage();
+    if (!activeState?.active) {
+      return;
+    }
+
+    setIsApplying(true);
+    try {
+      await apiClient.post('/test-mode/apply', {
+        sandboxHouseholdId: activeState.sandboxHouseholdId,
+        originalHouseholdId: activeState.originalHousehold.id,
+      });
+
+      restoreOriginalHouseholdState(activeState);
+      success('Alterações do modo teste aplicadas com sucesso!');
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Erro ao aplicar alterações do modo teste.';
+      showError(message);
+    } finally {
+      setIsApplying(false);
+    }
+  }, [testModeState, restoreOriginalHouseholdState, success, showError]);
+
+  const openApplyModal = useCallback(() => {
+    setIsApplyModalOpen(true);
+  }, []);
+
+  const closeApplyModal = useCallback(() => {
+    if (!isApplying) {
+      setIsApplyModalOpen(false);
+    }
+  }, [isApplying]);
 
   const isTestMode = Boolean(
     currentUser && testModeState?.active && testModeState.sandboxHouseholdId
@@ -210,8 +259,13 @@ export const TestModeProvider: React.FC<{ children: ReactNode }> = ({ children }
         originalHousehold: isTestMode ? testModeState?.originalHousehold ?? null : null,
         isStarting,
         isStopping,
+        isApplying,
+        isApplyModalOpen,
         startTestMode,
         stopTestMode,
+        applyTestMode,
+        openApplyModal,
+        closeApplyModal,
       }}
     >
       {children}

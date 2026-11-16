@@ -63,6 +63,10 @@ import {
   useUpdateCategory,
   useDeleteCategory,
 } from "../hooks/api/useCategories";
+import {
+  CATEGORY_ICON_OPTIONS,
+  getCategoryIconComponent,
+} from "../utils/categoryIcons";
 import { CategoryType } from "../lib/enums";
 import {
   deleteUser,
@@ -76,7 +80,7 @@ const SettingsPage = () => {
   const { theme, toggleTheme } = useTheme();
   const { success, error: showError } = useToastContext();
   const { currentUser } = useAuth();
-  const { isTestMode, isStarting, isStopping, startTestMode, stopTestMode } = useTestMode();
+  const { isTestMode, isStarting, isStopping, isApplying, startTestMode, stopTestMode, openApplyModal } = useTestMode();
   const { referralCount, getInviteLink } = useReferral();
   const { install, isInstalled, canInstall } = usePWAInstall();
   const [linkCopied, setLinkCopied] = useState(false);
@@ -91,7 +95,7 @@ const SettingsPage = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isResetAccountModalOpen, setIsResetAccountModalOpen] = useState(false);
   const [categoryDeleteConfirm, setCategoryDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
-  const [categoryForm, setCategoryForm] = useState<{ id: string | null; name: string; type: CategoryType } | null>(null);
+  const [categoryForm, setCategoryForm] = useState<{ id: string | null; name: string; type: CategoryType; icon: string } | null>(null);
   const currencyInfo = getCurrencyInfo();
   const { householdId } = useDefaultHousehold();
   const { data: categoriesList = [] } = useCategories({ householdId: householdId ?? undefined, type: undefined });
@@ -624,66 +628,102 @@ const SettingsPage = () => {
         </p>
 
         {categoryForm ? (
-          <div className="flex flex-wrap items-end gap-2 mb-4 p-3 border border-gray-100 dark:border-gray-800 rounded-lg">
-            <div className="flex-1 min-w-[140px]">
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">{t.name}</label>
-              <input
-                value={categoryForm.name}
-                onChange={(e) => setCategoryForm((f) => (f ? { ...f, name: e.target.value } : null))}
-                className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-light tracking-tight"
-                placeholder={t.name}
-              />
-            </div>
-            {!categoryForm.id && (
-              <div className="min-w-[120px]">
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">{t.type}</label>
-                <select
-                  value={categoryForm.type}
-                  onChange={(e) => setCategoryForm((f) => (f ? { ...f, type: e.target.value as CategoryType } : null))}
+          <div className="space-y-3 mb-4 p-3 border border-gray-100 dark:border-gray-800 rounded-lg">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[140px]">
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">{t.name}</label>
+                <input
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm((f) => (f ? { ...f, name: e.target.value } : null))}
                   className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-light tracking-tight"
-                >
-                  <option value={CategoryType.INCOME}>{t.income}</option>
-                  <option value={CategoryType.EXPENSE}>{t.expense}</option>
-                </select>
+                  placeholder={t.name}
+                />
               </div>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={async () => {
-                  if (!categoryForm?.name.trim() || !householdId) return;
-                  try {
-                    if (categoryForm.id) {
-                      await updateCategory.mutateAsync({ id: categoryForm.id, name: categoryForm.name.trim() });
-                      success(t.update);
-                    } else {
-                      await createCategory.mutateAsync({
-                        householdId,
-                        name: categoryForm.name.trim(),
-                        type: categoryForm.type,
-                      });
-                      success(t.create);
+              {!categoryForm.id && (
+                <div className="min-w-[120px]">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">{t.type}</label>
+                  <select
+                    value={categoryForm.type}
+                    onChange={(e) => setCategoryForm((f) => (f ? { ...f, type: e.target.value as CategoryType } : null))}
+                    className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-800 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-light tracking-tight"
+                  >
+                    <option value={CategoryType.INCOME}>{t.income}</option>
+                    <option value={CategoryType.EXPENSE}>{t.expense}</option>
+                  </select>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    if (!categoryForm?.name.trim() || !householdId) return;
+                    try {
+                      if (categoryForm.id) {
+                        await updateCategory.mutateAsync({
+                          id: categoryForm.id,
+                          name: categoryForm.name.trim(),
+                          icon: categoryForm.icon || null,
+                        });
+                        success(t.update);
+                      } else {
+                        await createCategory.mutateAsync({
+                          householdId,
+                          name: categoryForm.name.trim(),
+                          type: categoryForm.type,
+                          icon: categoryForm.icon || null,
+                        });
+                        success(t.create);
+                      }
+                      setCategoryForm(null);
+                    } catch (err: unknown) {
+                      showError(err instanceof Error ? err.message : "Erro");
                     }
-                    setCategoryForm(null);
-                  } catch (err: unknown) {
-                    showError(err instanceof Error ? err.message : "Erro");
-                  }
-                }}
-                disabled={!categoryForm.name.trim() || createCategory.isPending || updateCategory.isPending}
-                className="px-3 py-2.5 text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 border border-primary-600 dark:border-primary-500 rounded-md hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {categoryForm.id ? t.save : t.create}
-              </button>
-              <button
-                onClick={() => setCategoryForm(null)}
-                className="px-3 py-2.5 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white text-sm font-light tracking-tight rounded-md hover:opacity-70 transition-opacity bg-white dark:bg-gray-900"
-              >
-                {t.cancel}
-              </button>
+                  }}
+                  disabled={!categoryForm.name.trim() || createCategory.isPending || updateCategory.isPending}
+                  className="px-3 py-2.5 text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 border border-primary-600 dark:border-primary-500 rounded-md hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {categoryForm.id ? t.save : t.create}
+                </button>
+                <button
+                  onClick={() => setCategoryForm(null)}
+                  className="px-3 py-2.5 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white text-sm font-light tracking-tight rounded-md hover:opacity-70 transition-opacity bg-white dark:bg-gray-900"
+                >
+                  {t.cancel}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1.5">
+                Ícone
+              </label>
+              <div className="grid grid-cols-7 sm:grid-cols-11 gap-1.5 max-h-36 overflow-y-auto p-1">
+                {CATEGORY_ICON_OPTIONS.map((opt) => {
+                  const IconComponent = opt.component;
+                  const isSelected = categoryForm.icon === opt.name;
+                  return (
+                    <button
+                      key={opt.name}
+                      type="button"
+                      title={opt.label}
+                      onClick={() =>
+                        setCategoryForm((f) => (f ? { ...f, icon: opt.name } : null))
+                      }
+                      className={`h-9 flex items-center justify-center rounded-md border transition-colors ${
+                        isSelected
+                          ? "border-primary-600 dark:border-primary-400 bg-primary-50/50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400"
+                          : "border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-800 dark:hover:text-gray-200"
+                      }`}
+                    >
+                      <IconComponent className="h-4 w-4" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : (
           <button
-            onClick={() => setCategoryForm({ id: null, name: "", type: CategoryType.EXPENSE })}
+            onClick={() => setCategoryForm({ id: null, name: "", type: CategoryType.EXPENSE, icon: "Tag" })}
             className="mb-4 inline-flex items-center gap-2 px-3 py-2.5 text-sm font-light tracking-tight text-white bg-primary-600 dark:bg-primary-500 border border-primary-600 dark:border-primary-500 rounded-md hover:opacity-80 transition-opacity"
           >
             <Plus className="h-4 w-4" />
@@ -692,12 +732,19 @@ const SettingsPage = () => {
         )}
 
         <ul className="space-y-2">
-          {customCategories.map((c) => (
+          {customCategories.map((c) => {
+            const CatIcon = getCategoryIconComponent(c.icon || "Tag");
+            return (
             <li
               key={c.id}
               className="flex items-center justify-between py-2 px-3 rounded-md border border-gray-100 dark:border-gray-800"
             >
-              <span className="font-light text-gray-900 dark:text-white">{c.name}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="p-1.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 flex-shrink-0">
+                  <CatIcon className="h-4 w-4" />
+                </span>
+                <span className="font-light text-gray-900 dark:text-white truncate">{c.name}</span>
+              </div>
               <div className="flex items-center gap-2">
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full border font-light ${c.type === CategoryType.INCOME ? "border-green-300 dark:border-green-700 text-green-600 dark:text-green-400" : "border-red-300 dark:border-red-700 text-red-600 dark:text-red-400"
@@ -707,7 +754,7 @@ const SettingsPage = () => {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setCategoryForm({ id: c.id, name: c.name, type: c.type })}
+                  onClick={() => setCategoryForm({ id: c.id, name: c.name, type: c.type, icon: c.icon || "Tag" })}
                   className="p-1.5 text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
                   aria-label={t.edit}
                 >
@@ -723,7 +770,8 @@ const SettingsPage = () => {
                 </button>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
 
         <ConfirmModal
@@ -1014,18 +1062,32 @@ const SettingsPage = () => {
             : "Cria um clone temporário isolado do seu ambiente atual para testar alterações com segurança. Ao encerrar, tudo é restaurado."}
         </p>
         {isTestMode ? (
-          <button
-            onClick={stopTestMode}
-            disabled={isStopping}
-            className="inline-flex items-center px-4 py-2.5 text-sm font-light tracking-tight text-white bg-amber-600 dark:bg-amber-600 border border-amber-600 rounded-md hover:opacity-85 disabled:opacity-60 transition-opacity"
-          >
-            {isStopping ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <FlaskConical className="h-4 w-4 mr-2" />
-            )}
-            {isStopping ? "Restaurando..." : "Sair e restaurar"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={openApplyModal}
+              disabled={isStopping || isApplying}
+              className="inline-flex items-center px-4 py-2.5 text-sm font-light tracking-tight text-white bg-emerald-600 dark:bg-emerald-600 border border-emerald-600 rounded-md hover:opacity-85 disabled:opacity-60 transition-opacity"
+            >
+              {isApplying ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              {isApplying ? "Aplicando..." : "Aplicar alterações"}
+            </button>
+            <button
+              onClick={stopTestMode}
+              disabled={isStopping || isApplying}
+              className="inline-flex items-center px-4 py-2.5 text-sm font-light tracking-tight text-white bg-amber-600 dark:bg-amber-600 border border-amber-600 rounded-md hover:opacity-85 disabled:opacity-60 transition-opacity"
+            >
+              {isStopping ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FlaskConical className="h-4 w-4 mr-2" />
+              )}
+              {isStopping ? "Restaurando..." : "Sair e restaurar"}
+            </button>
+          </div>
         ) : (
           <button
             onClick={startTestMode}
